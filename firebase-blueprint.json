@@ -1,0 +1,69 @@
+{
+  "entities": {
+    "users": {
+      "title": "User",
+      "description": "User profile for students and admins",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Full Name" },
+        "email": { "type": "string", "description": "Email address" },
+        "phone": { "type": "string", "description": "Phone number" },
+        "university_id": { "type": "string", "description": "University ID number" },
+        "department": { "type": "string", "description": "Department" },
+        "role": { "type": "string", "enum": ["student", "admin"], "description": "User role" },
+        "photo": { "type": "string", "description": "URL to personal photo" },
+        "student_card_image": { "type": "string", "description": "URL to student card image" },
+        "required_hours": { "type": "number", "description": "Required invigilation hours" }
+      },
+      "required": ["name", "email", "role"]
+    },
+    "exam_slots": {
+      "title": "Exam Slot",
+      "description": "Available invigilation time slot",
+      "type": "object",
+      "properties": {
+        "course_name": { "type": "string", "description": "Course name" },
+        "exam_date": { "type": "string", "format": "date", "description": "Exam date" },
+        "start_time": { "type": "string", "description": "Start time" },
+        "end_time": { "type": "string", "description": "End time" },
+        "session_type": { "type": "string", "enum": ["morning", "evening"], "description": "Session type" },
+        "required_invigilators": { "type": "number", "description": "Required number of invigilators" },
+        "current_invigilators": { "type": "number", "description": "Current number of invigilators booked" },
+        "location": { "type": "string", "description": "Exam hall/location" },
+        "academic_year": { "type": "integer", "description": "Academic year (1-5)" }
+      },
+      "required": ["course_name", "exam_date", "start_time", "end_time", "required_invigilators", "academic_year"]
+    },
+    "bookings": {
+      "title": "Booking",
+      "description": "Student booking for an exam slot",
+      "type": "object",
+      "properties": {
+        "student_id": { "type": "string", "description": "UID of the student" },
+        "slot_id": { "type": "string", "description": "ID of the exam slot" },
+        "booked_hours": { "type": "number", "description": "Number of hours for this slot" },
+        "student_name": { "type": "string", "description": "Name of the student (denormalized)" },
+        "course_name": { "type": "string", "description": "Course name (denormalized)" },
+        "exam_date": { "type": "string", "description": "Exam date (denormalized)" }
+      },
+      "required": ["student_id", "slot_id", "booked_hours"]
+    },
+    "settings": {
+      "title": "Settings",
+      "description": "Global application settings",
+      "type": "object",
+      "properties": {
+        "registration_open": { "type": "boolean", "description": "Whether registration is open" },
+        "registration_start": { "type": "string", "format": "date", "description": "Start of registration period" },
+        "registration_end": { "type": "string", "format": "date", "description": "End of registration period" },
+        "default_required_hours": { "type": "number", "description": "Default required hours for students" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "users", "description": "User profiles" },
+    "/exam_slots/{slotId}": { "schema": "exam_slots", "description": "Exam slots" },
+    "/bookings/{bookingId}": { "schema": "bookings", "description": "Slot bookings" },
+    "/settings/global": { "schema": "settings", "description": "Global settings" }
+  }
+}

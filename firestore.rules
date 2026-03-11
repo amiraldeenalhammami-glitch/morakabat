@@ -1,0 +1,107 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Fields: name, email, phone, university_id, department, role, photo, student_card_image, required_hours
+    //
+    // Collection: exam_slots
+    // Fields: course_name, exam_date, start_time, end_time, session_type, required_invigilators, location
+    //
+    // Collection: bookings
+    // Fields: student_id, slot_id, booked_hours, student_name, course_name, exam_date
+    //
+    // Collection: settings
+    // Fields: registration_open, registration_start, registration_end
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (request.auth.token.email == "amiraldeenalhammami@ab3adacademy.com" || 
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+    }
+
+    function isValidUser(data) {
+      let allowedFields = ['name', 'email', 'phone', 'university_id', 'department', 'role', 'photo', 'student_card_image', 'required_hours', 'createdAt'];
+      return data.keys().hasOnly(allowedFields) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+             data.role in ['student', 'admin'];
+    }
+
+    function isValidExamSlot(data) {
+      let requiredFields = ['course_name', 'exam_date', 'start_time', 'end_time', 'required_invigilators', 'academic_year'];
+      return data.keys().hasAll(requiredFields) &&
+             data.course_name is string && data.course_name.size() > 0 &&
+             data.required_invigilators is number && data.required_invigilators > 0 &&
+             data.academic_year is int && data.academic_year >= 1 && data.academic_year <= 5;
+    }
+
+    function isValidBooking(data) {
+      let requiredFields = ['student_id', 'slot_id', 'booked_hours', 'student_name', 'course_name', 'exam_date'];
+      return data.keys().hasAll(requiredFields) &&
+             (data.student_id == request.auth.uid || isAdmin());
+    }
+
+    function isValidSettings(data) {
+      return data.keys().hasOnly(['registration_open', 'registration_start', 'registration_end', 'default_required_hours']) &&
+             data.registration_open is bool &&
+             (data.default_required_hours is number || !('default_required_hours' in data));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && userId == request.auth.uid && isValidUser(request.resource.data) && request.resource.data.role == 'student';
+      allow update: if isAuthenticated() && (userId == request.auth.uid || isAdmin()) && isValidUser(request.resource.data) && 
+                    (isAdmin() || request.resource.data.role == resource.data.role);
+      allow delete: if isAdmin();
+    }
+
+    match /exam_slots/{slotId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() && isValidExamSlot(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (isAdmin() || isValidBooking(request.resource.data));
+      allow update: if isAdmin();
+      allow delete: if isAuthenticated() && (resource.data.student_id == request.auth.uid || isAdmin());
+    }
+
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() && isValidSettings(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /otps/{email} {
+      allow read, write: if false;
+    }
+    
+    match /test/connection {
+      allow read: if true;
+    }
+  }
+}
