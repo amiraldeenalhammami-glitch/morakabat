@@ -4,7 +4,7 @@
  */
 
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Layout } from './components/Layout';
 
@@ -20,6 +20,24 @@ import AdminDashboard from './pages/AdminDashboard';
 import AdminSlots from './pages/AdminSlots';
 import AdminStudents from './pages/AdminStudents';
 import AdminSettings from './pages/AdminSettings';
+
+function HomeRedirect() {
+  const { isAdmin, loading, user } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return isAdmin ? <Navigate to="/admin" replace /> : <Navigate to="/dashboard" replace />;
+}
 
 export default function App() {
   return (
@@ -86,8 +104,8 @@ export default function App() {
           } />
 
           {/* Default Redirects */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<HomeRedirect />} />
+          <Route path="*" element={<HomeRedirect />} />
         </Routes>
       </Router>
     </AuthProvider>

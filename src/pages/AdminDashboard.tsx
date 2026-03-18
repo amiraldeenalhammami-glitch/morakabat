@@ -89,8 +89,8 @@ export default function AdminDashboard() {
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl w-fit mb-4">
             <Users size={24} />
           </div>
-          <p className="text-sm text-slate-500">إجمالي الطلاب</p>
-          <p className="text-3xl font-bold text-slate-900">{students.length}</p>
+          <p className="text-sm text-slate-500">إجمالي الطلاب النشطين</p>
+          <p className="text-3xl font-bold text-slate-900">{students.filter(s => s.status === 'active').length}</p>
         </div>
 
         <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">

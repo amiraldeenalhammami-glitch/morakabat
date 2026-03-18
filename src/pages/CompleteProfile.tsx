@@ -23,7 +23,7 @@ export default function CompleteProfile() {
       navigate('/login');
     }
     if (!authLoading && profile) {
-      navigate('/dashboard');
+      navigate('/');
     }
   }, [user, profile, authLoading, navigate]);
 
@@ -85,7 +85,7 @@ export default function CompleteProfile() {
       }
 
       console.log('Navigation to dashboard...');
-      navigate('/dashboard');
+      navigate('/');
     } catch (err: any) {
       console.error('Final error catch:', err);
       setError(err.message || 'حدث خطأ غير متوقع أثناء إكمال الملف الشخصي.');

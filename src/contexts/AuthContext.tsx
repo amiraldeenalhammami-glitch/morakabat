@@ -32,6 +32,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let unsubscribeProfile: (() => void) | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      setLoading(true); // Reset loading on auth change
       setUser(firebaseUser);
       
       if (unsubscribeProfile) {

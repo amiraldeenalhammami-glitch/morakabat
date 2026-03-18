@@ -21,7 +21,7 @@ export default function Login() {
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      navigate('/dashboard');
+      navigate('/');
     } catch (err: any) {
       console.error(err);
       const errorCode = err.code;
@@ -47,7 +47,7 @@ export default function Login() {
       // Check if user has a profile
       const userDoc = await getDoc(doc(db, 'users', user.uid));
       if (userDoc.exists()) {
-        navigate('/dashboard');
+        navigate('/');
       } else {
         navigate('/complete-profile');
       }
