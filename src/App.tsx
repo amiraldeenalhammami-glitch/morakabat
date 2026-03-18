@@ -11,6 +11,7 @@ import { Layout } from './components/Layout';
 // Pages
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
 import CompleteProfile from './pages/CompleteProfile';
 import StudentDashboard from './pages/StudentDashboard';
 import BookingPage from './pages/BookingPage';
@@ -28,6 +29,7 @@ export default function App() {
           {/* Public Routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/complete-profile" element={<CompleteProfile />} />
 
           {/* Student Routes */}

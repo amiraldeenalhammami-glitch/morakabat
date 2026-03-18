@@ -2,13 +2,16 @@ import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { auth } from '../firebase';
-import { LogOut, User, LayoutDashboard, Calendar, Users, Settings, Menu, X } from 'lucide-react';
+import { LogOut, User, LayoutDashboard, Calendar, Users, Settings, Menu, X, Download } from 'lucide-react';
+import { Logo } from './Logo';
+import { usePWA } from '../hooks/usePWA';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { profile, isAdmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
+  const { canInstall, installApp } = usePWA();
 
   const handleLogout = async () => {
     await auth.signOut();
@@ -22,6 +25,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         { name: 'الطلاب', path: '/admin/students', icon: Users },
         { name: 'الإعدادات', path: '/admin/settings', icon: Settings },
       ]
+    : profile?.status !== 'active'
+    ? [
+        { name: 'لوحة التحكم', path: '/dashboard', icon: LayoutDashboard },
+        { name: 'الملف الشخصي', path: '/profile', icon: User },
+      ]
     : [
         { name: 'لوحة التحكم', path: '/dashboard', icon: LayoutDashboard },
         { name: 'حجز فترة', path: '/book', icon: Calendar },
@@ -32,7 +40,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     <div className="min-h-screen flex flex-col md:flex-row">
       {/* Mobile Header */}
       <div className="md:hidden bg-white border-b px-4 py-3 flex justify-between items-center sticky top-0 z-50">
-        <h1 className="text-xl font-bold text-indigo-600">نظام المراقبة</h1>
+        <Logo className="w-8 h-8" />
         <button onClick={() => setIsMenuOpen(!isMenuOpen)}>
           {isMenuOpen ? <X /> : <Menu />}
         </button>
@@ -46,8 +54,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         ${isMenuOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}
       `}>
         <div className="p-6 hidden md:block">
-          <h1 className="text-2xl font-bold text-indigo-600">نظام المراقبة</h1>
-          <p className="text-xs text-slate-500 mt-1">جامعة الدراسات العليا</p>
+          <Logo className="w-10 h-10" />
         </div>
 
         <nav className="flex-1 px-4 space-y-1 mt-4 md:mt-0">
@@ -74,13 +81,18 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         </nav>
 
         <div className="p-4 border-t">
+          {canInstall && (
+            <button
+              onClick={installApp}
+              className="w-full flex items-center gap-3 px-4 py-3 mb-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-colors font-bold text-sm"
+            >
+              <Download size={20} />
+              <span>تنزيل التطبيق</span>
+            </button>
+          )}
           <div className="flex items-center gap-3 px-4 py-3 mb-2">
-            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold overflow-hidden">
-              {profile?.photo ? (
-                <img src={profile.photo} alt={profile.name} className="w-full h-full object-cover" />
-              ) : (
-                profile?.name?.charAt(0) || 'U'
-              )}
+            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xl font-bold overflow-hidden">
+              {profile?.avatar_emoji || profile?.name?.charAt(0) || 'U'}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-slate-900 truncate">{profile?.name}</p>
@@ -94,6 +106,20 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             <LogOut size={20} />
             <span>تسجيل الخروج</span>
           </button>
+          
+          <div className="mt-4 pt-4 border-t text-center">
+            <p className="text-[10px] text-slate-400">
+              صمم هذا التطبيق بواسطة{' '}
+              <a 
+                href="https://www.facebook.com/amir.aldeen.alhammami/?locale=ar_AR" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-indigo-500 hover:underline font-medium"
+              >
+                م.أمير الدين الحمامي
+              </a>
+            </p>
+          </div>
         </div>
       </aside>
 

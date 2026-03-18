@@ -1,70 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { User, Mail, Phone, IdCard, Building, Clock, Shield, Edit2, Save, X, Camera, Loader2 } from 'lucide-react';
+import { User, Mail, Phone, IdCard, Building, Clock, Shield, Edit2, Save, X, Loader2, Camera, Image as ImageIcon, CheckCircle2, MessageSquare, XCircle } from 'lucide-react';
 import { doc, updateDoc, getDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase';
+import { db } from '../firebase';
 import { AppSettings } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
-
-// Helper to compress image
-const compressImage = (file: File): Promise<Blob> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (event) => {
-      const img = new Image();
-      img.src = event.target?.result as string;
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 800;
-        const MAX_HEIGHT = 800;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
-          }
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
-        canvas.toBlob(
-          (blob) => {
-            if (blob) resolve(blob);
-            else reject(new Error('Canvas to Blob failed'));
-          },
-          'image/jpeg',
-          0.7 // Quality
-        );
-      };
-    };
-    reader.onerror = (error) => reject(error);
-  });
-};
+import { uploadToCloudinary } from '../utils/cloudinary';
 
 export default function ProfilePage() {
   const { profile, user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [globalSettings, setGlobalSettings] = useState<AppSettings | null>(null);
+  const [profileImage, setProfileImage] = useState<File | null>(null);
+  const [idCardImage, setIdCardImage] = useState<File | null>(null);
   const [formData, setFormData] = useState({
-    name: profile?.name || '',
-    phone: profile?.phone || '',
-    university_id: profile?.university_id || '',
-    department: profile?.department || '',
+    name: '',
+    phone: '',
+    university_id: '',
+    department: '',
   });
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [idCardFile, setIdCardFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    if (profile && !isEditing) {
+      setFormData({
+        name: profile.name || '',
+        phone: profile.phone || '',
+        university_id: profile.university_id || '',
+        department: profile.department || '',
+      });
+    }
+  }, [profile, isEditing]);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -85,30 +51,25 @@ export default function ProfilePage() {
   const handleSave = async () => {
     setLoading(true);
     try {
-      let photoUrl = profile.photo;
-      let idCardUrl = profile.student_card_image;
+      let profile_image_url = profile.profile_image_url || '';
+      let id_card_image_url = profile.id_card_image_url || '';
 
-      if (photoFile) {
-        const compressedPhoto = await compressImage(photoFile);
-        const photoRef = ref(storage, `users/${user.uid}/photo`);
-        await uploadBytes(photoRef, compressedPhoto);
-        photoUrl = await getDownloadURL(photoRef);
+      if (profileImage) {
+        profile_image_url = await uploadToCloudinary(profileImage);
       }
-
-      if (idCardFile) {
-        const compressedIdCard = await compressImage(idCardFile);
-        const idCardRef = ref(storage, `users/${user.uid}/id_card`);
-        await uploadBytes(idCardRef, compressedIdCard);
-        idCardUrl = await getDownloadURL(idCardRef);
+      if (idCardImage) {
+        id_card_image_url = await uploadToCloudinary(idCardImage);
       }
 
       await updateDoc(doc(db, 'users', user.uid), {
         ...formData,
-        photo: photoUrl,
-        student_card_image: idCardUrl,
+        profile_image_url,
+        id_card_image_url,
       });
 
       setIsEditing(false);
+      setProfileImage(null);
+      setIdCardImage(null);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `users/${user.uid}`);
     } finally {
@@ -130,7 +91,7 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-8">
-      <header className="flex justify-between items-center">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">الملف الشخصي</h1>
           <p className="text-slate-500 mt-1">بياناتك الشخصية والجامعية المسجلة في النظام</p>
@@ -151,10 +112,14 @@ export default function ProfilePage() {
               className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
             >
               {loading ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
-              <span>حفظ</span>
+              <span>حفظ التغييرات</span>
             </button>
             <button
-              onClick={() => setIsEditing(false)}
+              onClick={() => {
+                setIsEditing(false);
+                setProfileImage(null);
+                setIdCardImage(null);
+              }}
               disabled={loading}
               className="flex items-center gap-2 bg-slate-100 text-slate-600 px-6 py-3 rounded-2xl font-bold hover:bg-slate-200 transition-colors disabled:opacity-50"
             >
@@ -165,26 +130,53 @@ export default function ProfilePage() {
         )}
       </header>
 
+      {profile.admin_note && (
+        <div className="bg-indigo-50 border border-indigo-100 p-6 rounded-3xl flex items-start gap-4 text-indigo-900 shadow-sm">
+          <div className="p-2 bg-white rounded-xl text-indigo-600 shadow-sm">
+            <MessageSquare size={20} />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-1">ملاحظة من الإدارة</p>
+            <p className="font-medium">{profile.admin_note}</p>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Profile Card */}
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-8 text-center relative">
-            <div className="w-32 h-32 rounded-full bg-indigo-50 mx-auto mb-6 flex items-center justify-center text-indigo-600 text-4xl font-bold overflow-hidden border-4 border-white shadow-lg relative group">
-              {photoFile ? (
-                <img src={URL.createObjectURL(photoFile)} alt="Preview" className="w-full h-full object-cover" />
-              ) : profile.photo ? (
-                <img src={profile.photo} alt={profile.name} className="w-full h-full object-cover" />
+            <div className="w-32 h-32 rounded-full bg-indigo-50 mx-auto mb-6 flex items-center justify-center text-indigo-600 text-6xl font-bold overflow-hidden border-4 border-white shadow-lg relative group">
+              {profile.profile_image_url ? (
+                <img 
+                  src={profile.profile_image_url} 
+                  alt={profile.name} 
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
               ) : (
-                profile.name.charAt(0)
+                profile.avatar_emoji || profile.name.charAt(0)
               )}
               
               {isEditing && (
-                <label className="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                  <Camera size={24} />
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => setPhotoFile(e.target.files?.[0] || null)} />
+                <label className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center cursor-pointer transition-opacity text-white">
+                  <Camera size={32} className="mb-1" />
+                  <span className="text-[10px] font-bold">تغيير الصورة</span>
+                  <input 
+                    type="file" 
+                    className="hidden" 
+                    accept="image/*"
+                    onChange={(e) => setProfileImage(e.target.files?.[0] || null)}
+                  />
                 </label>
               )}
             </div>
+
+            {profileImage && (
+              <p className="text-xs text-indigo-600 font-bold mb-4 flex items-center justify-center gap-1">
+                <CheckCircle2 size={12} /> تم اختيار صورة جديدة
+              </p>
+            )}
             
             {isEditing ? (
               <input
@@ -198,38 +190,68 @@ export default function ProfilePage() {
             
             <p className="text-slate-500 mt-1">{profile.department}</p>
             
-            <div className="mt-6 pt-6 border-t border-slate-100">
-              <span className={`px-4 py-2 rounded-full text-sm font-bold ${profile.role === 'admin' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'}`}>
-                {profile.role === 'admin' ? 'مدير نظام' : 'طالب مراقب'}
-              </span>
+            <div className="mt-6 pt-6 border-t border-slate-100 flex flex-col gap-3">
+              <div className="flex items-center justify-center gap-2">
+                {profile.status === 'active' ? (
+                  <span className="flex items-center gap-1 bg-emerald-50 text-emerald-600 px-4 py-2 rounded-full text-xs font-bold ring-1 ring-emerald-200">
+                    <CheckCircle2 size={14} /> حساب مفعل
+                  </span>
+                ) : profile.status === 'frozen' ? (
+                  <span className="flex items-center gap-1 bg-rose-50 text-rose-600 px-4 py-2 rounded-full text-xs font-bold ring-1 ring-rose-200">
+                    <XCircle size={14} /> حساب مجمد
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 bg-amber-50 text-amber-600 px-4 py-2 rounded-full text-xs font-bold ring-1 ring-amber-200">
+                    <Clock size={14} /> قيد المراجعة
+                  </span>
+                )}
+                <span className={`px-4 py-2 rounded-full text-xs font-bold ${profile.role === 'admin' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'}`}>
+                  {profile.role === 'admin' ? 'مدير نظام' : 'طالب مراقب'}
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* ID Card Display */}
+          {/* ID Card Display/Upload */}
           <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6">
-            <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
-              <IdCard size={20} className="text-indigo-600" />
-              البطاقة الجامعية
+            <h3 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <IdCard size={18} className="text-indigo-600" />
+              صورة البطاقة الجامعية
             </h3>
-            <div className="aspect-video rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 relative group">
-              {idCardFile ? (
-                <img src={URL.createObjectURL(idCardFile)} alt="Preview" className="w-full h-full object-contain" />
-              ) : profile.student_card_image ? (
-                <img src={profile.student_card_image} alt="البطاقة الجامعية" className="w-full h-full object-contain" />
+            
+            <div className="relative aspect-video bg-slate-50 rounded-2xl overflow-hidden border-2 border-dashed border-slate-200 group">
+              {profile.id_card_image_url ? (
+                <img 
+                  src={profile.id_card_image_url} 
+                  alt="ID Card" 
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-slate-400">لا توجد صورة</div>
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
+                  <ImageIcon size={32} className="mb-2" />
+                  <p className="text-xs">لم يتم رفع صورة البطاقة</p>
+                </div>
               )}
-              
+
               {isEditing && (
-                <label className="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                  <div className="flex flex-col items-center gap-2">
-                    <Camera size={32} />
-                    <span className="text-sm font-bold">تغيير صورة البطاقة</span>
-                  </div>
-                  <input type="file" accept="image/*" className="hidden" onChange={(e) => setIdCardFile(e.target.files?.[0] || null)} />
+                <label className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center cursor-pointer transition-opacity text-white">
+                  <Camera size={32} className="mb-1" />
+                  <span className="text-xs font-bold">رفع صورة جديدة</span>
+                  <input 
+                    type="file" 
+                    className="hidden" 
+                    accept="image/*"
+                    onChange={(e) => setIdCardImage(e.target.files?.[0] || null)}
+                  />
                 </label>
               )}
             </div>
+            {idCardImage && (
+              <p className="text-xs text-indigo-600 font-bold mt-2 flex items-center gap-1">
+                <CheckCircle2 size={12} /> تم اختيار صورة بطاقة جديدة
+              </p>
+            )}
           </div>
         </div>
 

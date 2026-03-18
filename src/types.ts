@@ -8,9 +8,14 @@ export interface UserProfile {
   university_id?: string;
   department?: string;
   role: UserRole;
-  photo?: string;
-  student_card_image?: string;
+  requested_role?: UserRole;
+  avatar_emoji?: string;
   required_hours?: number;
+  status?: 'pending' | 'active' | 'frozen';
+  admin_note?: string;
+  student_note?: string;
+  profile_image_url?: string;
+  id_card_image_url?: string;
 }
 
 export interface ExamSlot {
@@ -42,5 +47,8 @@ export interface AppSettings {
   registration_open: boolean;
   registration_start: string;
   registration_end: string;
+  exam_start: string;
+  exam_end: string;
   default_required_hours: number;
+  app_logo_url?: string;
 }

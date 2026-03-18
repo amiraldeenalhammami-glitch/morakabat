@@ -1,0 +1,20 @@
+{
+  "name": "My App",
+  "short_name": "My App",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "https://res.cloudinary.com/dci2z7ij2/image/upload/v1773820733/images_nfcy4z.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://res.cloudinary.com/dci2z7ij2/image/upload/v1773820733/images_nfcy4z.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

@@ -56,7 +56,8 @@
         "registration_open": { "type": "boolean", "description": "Whether registration is open" },
         "registration_start": { "type": "string", "format": "date", "description": "Start of registration period" },
         "registration_end": { "type": "string", "format": "date", "description": "End of registration period" },
-        "default_required_hours": { "type": "number", "description": "Default required hours for students" }
+        "default_required_hours": { "type": "number", "description": "Default required hours for students" },
+        "app_logo_url": { "type": "string", "description": "URL to application logo" }
       }
     }
   },

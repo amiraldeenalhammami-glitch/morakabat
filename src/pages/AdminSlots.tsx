@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useAuth } from '../contexts/AuthContext';
 import { ExamSlot, Booking } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
 import { Plus, Trash2, Edit2, X, Check, Calendar, Clock, MapPin, Users, Loader2, User, Download } from 'lucide-react';
 
 export default function AdminSlots() {
+  const { profile } = useAuth();
   const [slots, setSlots] = useState<ExamSlot[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,6 +26,8 @@ export default function AdminSlots() {
   });
 
   useEffect(() => {
+    if (!profile?.uid) return;
+
     const unsubscribeSlots = onSnapshot(collection(db, 'exam_slots'), (snapshot) => {
       setSlots(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExamSlot)));
     }, (error) => {
@@ -41,7 +45,7 @@ export default function AdminSlots() {
       unsubscribeSlots();
       unsubscribeBookings();
     };
-  }, []);
+  }, [profile?.uid]);
 
   const handleDownloadCSV = () => {
     const headers = ['المادة', 'السنة الدراسية', 'التاريخ', 'الوقت', 'الفترة', 'الموقع', 'المراقبون المحجوزون'];

@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { auth, db, storage } from '../firebase';
-import { UserPlus, Mail, Lock, User, Phone, IdCard, Building, Camera, AlertCircle } from 'lucide-react';
+import { auth, db } from '../firebase';
+import { UserPlus, Mail, Lock, User, Phone, IdCard, Building, AlertCircle, Camera, Image as ImageIcon, CheckCircle } from 'lucide-react';
+import { uploadToCloudinary } from '../utils/cloudinary';
+import { Logo } from '../components/Logo';
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -14,9 +15,10 @@ export default function Register() {
     phone: '',
     university_id: '',
     department: '',
+    requested_role: 'student' as 'student' | 'admin',
   });
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [idCard, setIdCard] = useState<File | null>(null);
+  const [profileImage, setProfileImage] = useState<File | null>(null);
+  const [idCardImage, setIdCardImage] = useState<File | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'form' | 'otp'>('form');
@@ -31,6 +33,12 @@ export default function Register() {
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (formData.password.length < 6) {
+      setError('يجب أن تكون كلمة المرور 6 أحرف على الأقل');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -79,19 +87,23 @@ export default function Register() {
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
 
-      let photoUrl = '';
-      let idCardUrl = '';
+      let profileImageUrl = '';
+      let idCardImageUrl = '';
 
-      if (photo) {
-        const photoRef = ref(storage, `users/${user.uid}/photo`);
-        await uploadBytes(photoRef, photo);
-        photoUrl = await getDownloadURL(photoRef);
+      if (profileImage) {
+        try {
+          profileImageUrl = await uploadToCloudinary(profileImage);
+        } catch (err) {
+          console.error('Profile image upload failed:', err);
+        }
       }
 
-      if (idCard) {
-        const idCardRef = ref(storage, `users/${user.uid}/id_card`);
-        await uploadBytes(idCardRef, idCard);
-        idCardUrl = await getDownloadURL(idCardRef);
+      if (idCardImage) {
+        try {
+          idCardImageUrl = await uploadToCloudinary(idCardImage);
+        } catch (err) {
+          console.error('ID card image upload failed:', err);
+        }
       }
 
       await setDoc(doc(db, 'users', user.uid), {
@@ -101,8 +113,12 @@ export default function Register() {
         university_id: formData.university_id,
         department: formData.department,
         role: 'student',
-        photo: photoUrl,
-        student_card_image: idCardUrl,
+        requested_role: formData.requested_role,
+        status: 'pending',
+        profile_image_url: profileImageUrl,
+        id_card_image_url: idCardImageUrl,
+        admin_note: '',
+        student_note: '',
         required_hours: 16, // Default
         createdAt: new Date().toISOString(),
       });
@@ -110,7 +126,11 @@ export default function Register() {
       navigate('/dashboard');
     } catch (err: any) {
       console.error(err);
-      setError('حدث خطأ أثناء إنشاء الحساب. يرجى المحاولة مرة أخرى.');
+      if (err.code === 'auth/email-already-in-use') {
+        setError('هذا الحساب مسجل بالفعل مسبقاً. يرجى تسجيل الدخول بدلاً من إنشاء حساب جديد.');
+      } else {
+        setError('حدث خطأ أثناء إنشاء الحساب. يرجى المحاولة مرة أخرى.');
+      }
     } finally {
       setLoading(false);
     }
@@ -119,9 +139,11 @@ export default function Register() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4 py-12">
       <div className="max-w-2xl w-full bg-white rounded-3xl shadow-xl p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-indigo-600">إنشاء حساب جديد</h1>
-          <p className="text-slate-500 mt-2">انضم إلى نظام مراقبة الامتحانات كطالب مراقب</p>
+        <div className="flex flex-col items-center mb-8">
+          <Logo className="w-16 h-16" showText={false} />
+          <h1 className="text-3xl font-bold text-indigo-600 mt-4">إنشاء حساب جديد</h1>
+          <p className="text-slate-500 mt-2 text-center">انضم إلى نظام المراقبات الامتحانية كطالب مراقب</p>
+          <p className="text-xs text-slate-400 mt-1">جامعة دمشق كلية الهندسة المعمارية</p>
         </div>
 
         {error && (
@@ -174,6 +196,7 @@ export default function Register() {
                     name="password"
                     type="password"
                     required
+                    minLength={6}
                     value={formData.password}
                     onChange={handleChange}
                     className="w-full pr-12 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
@@ -229,28 +252,71 @@ export default function Register() {
                   />
                 </div>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">الصورة الشخصية</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  required
-                  onChange={(e) => setPhoto(e.target.files?.[0] || null)}
-                  className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                />
+                <label className="block text-sm font-medium text-slate-700 mb-2">نوع الحساب المطلوب</label>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, requested_role: 'student' })}
+                    className={`py-3 px-4 rounded-2xl border-2 transition-all font-bold text-sm ${
+                      formData.requested_role === 'student'
+                        ? 'border-indigo-600 bg-indigo-50 text-indigo-600'
+                        : 'border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-200'
+                    }`}
+                  >
+                    طالب
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, requested_role: 'admin' })}
+                    className={`py-3 px-4 rounded-2xl border-2 transition-all font-bold text-sm ${
+                      formData.requested_role === 'admin'
+                        ? 'border-indigo-600 bg-indigo-50 text-indigo-600'
+                        : 'border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-200'
+                    }`}
+                  >
+                    مدير
+                  </button>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">صورة البطاقة الجامعية</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  required
-                  onChange={(e) => setIdCard(e.target.files?.[0] || null)}
-                  className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                />
+
+              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">الصورة الشخصية (اختياري)</label>
+                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:bg-slate-50 transition-all overflow-hidden relative">
+                    {profileImage ? (
+                      <div className="flex flex-col items-center">
+                        <CheckCircle size={24} className="text-emerald-500 mb-1" />
+                        <span className="text-xs text-slate-500 px-2 text-center truncate w-full">{profileImage.name}</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center">
+                        <Camera size={24} className="text-slate-400 mb-1" />
+                        <span className="text-xs text-slate-400">اختر صورة</span>
+                      </div>
+                    )}
+                    <input type="file" className="hidden" accept="image/*" onChange={(e) => setProfileImage(e.target.files?.[0] || null)} />
+                  </label>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">صورة البطاقة الجامعية (اختياري)</label>
+                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:bg-slate-50 transition-all overflow-hidden relative">
+                    {idCardImage ? (
+                      <div className="flex flex-col items-center">
+                        <CheckCircle size={24} className="text-emerald-500 mb-1" />
+                        <span className="text-xs text-slate-500 px-2 text-center truncate w-full">{idCardImage.name}</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center">
+                        <ImageIcon size={24} className="text-slate-400 mb-1" />
+                        <span className="text-xs text-slate-400">اختر صورة</span>
+                      </div>
+                    )}
+                    <input type="file" className="hidden" accept="image/*" onChange={(e) => setIdCardImage(e.target.files?.[0] || null)} />
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -332,6 +398,20 @@ export default function Register() {
             تسجيل الدخول
           </Link>
         </p>
+
+        <div className="mt-8 pt-6 border-t text-center">
+          <p className="text-[10px] text-slate-400">
+            صمم هذا التطبيق بواسطة{' '}
+            <a 
+              href="https://www.facebook.com/amir.aldeen.alhammami/?locale=ar_AR" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-indigo-500 hover:underline font-medium"
+            >
+              م.أمير الدين الحمامي
+            </a>
+          </p>
+        </div>
       </div>
     </div>
   );

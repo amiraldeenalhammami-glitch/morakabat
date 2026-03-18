@@ -1,18 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { collection, onSnapshot, query, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useAuth } from '../contexts/AuthContext';
 import { ExamSlot, Booking, UserProfile } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
-import { Users, Calendar, Clock, CheckCircle, ArrowRight } from 'lucide-react';
+import { Users, Calendar, Clock, CheckCircle, ArrowRight, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { usePWA } from '../hooks/usePWA';
 
 export default function AdminDashboard() {
+  const { profile } = useAuth();
   const [slots, setSlots] = useState<ExamSlot[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [students, setStudents] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const { canInstall, installApp } = usePWA();
 
   useEffect(() => {
+    if (!profile?.uid) return;
+
     const unsubscribeSlots = onSnapshot(collection(db, 'exam_slots'), (snapshot) => {
       setSlots(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExamSlot)));
     }, (error) => {
@@ -28,7 +34,7 @@ export default function AdminDashboard() {
     const unsubscribeStudents = onSnapshot(query(collection(db, 'users')), (snapshot) => {
       setStudents(snapshot.docs
         .map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile))
-        .filter(u => u.role === 'student')
+        .filter(u => u.role === 'student' && u.email !== "amiraldeenalhammami@ab3adacademy.com")
       );
       setLoading(false);
     }, (error) => {
@@ -40,10 +46,12 @@ export default function AdminDashboard() {
       unsubscribeBookings();
       unsubscribeStudents();
     };
-  }, []);
+  }, [profile?.uid]);
 
   const totalRequiredInvigilators = slots.reduce((acc, curr) => acc + curr.required_invigilators, 0);
-  const totalBookedSlots = bookings.length;
+  const studentIds = new Set(students.map(s => s.uid));
+  const studentBookings = bookings.filter(b => studentIds.has(b.student_id));
+  const totalBookedSlots = studentBookings.length;
   const coveragePercentage = totalRequiredInvigilators > 0 
     ? Math.round((totalBookedSlots / totalRequiredInvigilators) * 100) 
     : 0;
@@ -59,9 +67,20 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-3xl font-bold text-slate-900">لوحة تحكم المدير</h1>
-        <p className="text-slate-500 mt-1">نظرة عامة على حالة المراقبة والطلاب</p>
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">لوحة تحكم المدير</h1>
+          <p className="text-slate-500 mt-1">نظرة عامة على حالة المراقبة والطلاب</p>
+        </div>
+        {canInstall && (
+          <button
+            onClick={installApp}
+            className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200"
+          >
+            <Download size={20} />
+            <span>تنزيل التطبيق</span>
+          </button>
+        )}
       </header>
 
       {/* Stats Grid */}
@@ -133,7 +152,7 @@ export default function AdminDashboard() {
             </Link>
           </div>
           <div className="divide-y divide-slate-100">
-            {bookings.slice(0, 5).map((booking) => (
+            {studentBookings.slice(0, 5).map((booking) => (
               <div key={booking.id} className="p-4 flex items-center gap-4 hover:bg-slate-50 transition-colors">
                 <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold">
                   {booking.student_name.charAt(0)}
@@ -147,7 +166,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
             ))}
-            {bookings.length === 0 && (
+            {studentBookings.length === 0 && (
               <div className="p-12 text-center text-slate-500">لا توجد حجوزات بعد.</div>
             )}
           </div>
@@ -163,7 +182,7 @@ export default function AdminDashboard() {
           </div>
           <div className="divide-y divide-slate-100">
             {students.slice(0, 5).map((student) => {
-              const studentHours = bookings
+              const studentHours = studentBookings
                 .filter(b => b.student_id === student.uid)
                 .reduce((acc, curr) => acc + curr.booked_hours, 0);
               const required = student.required_hours || 16;

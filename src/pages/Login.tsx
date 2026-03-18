@@ -4,6 +4,7 @@ import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../firebase';
 import { LogIn, Mail, Lock, AlertCircle, Chrome } from 'lucide-react';
+import { Logo } from '../components/Logo';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -23,7 +24,14 @@ export default function Login() {
       navigate('/dashboard');
     } catch (err: any) {
       console.error(err);
-      setError('خطأ في البريد الإلكتروني أو كلمة المرور');
+      const errorCode = err.code;
+      if (errorCode === 'auth/invalid-credential' || errorCode === 'auth/wrong-password' || errorCode === 'auth/user-not-found') {
+        setError('خطأ في البريد الإلكتروني أو كلمة المرور. يرجى التأكد من البيانات والمحاولة مرة أخرى.');
+      } else if (errorCode === 'auth/too-many-requests') {
+        setError('تم حظر المحاولات مؤقتاً بسبب كثرة محاولات تسجيل الدخول الفاشلة. يرجى المحاولة لاحقاً.');
+      } else {
+        setError('حدث خطأ أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى.');
+      }
     } finally {
       setLoading(false);
     }
@@ -49,7 +57,9 @@ export default function Login() {
       if (errorCode === 'auth/popup-blocked') {
         setError('تم حظر النافذة المنبثقة. يرجى السماح بالمنبثقات لهذا الموقع.');
       } else if (errorCode === 'auth/unauthorized-domain') {
-        setError('هذا النطاق غير مصرح به في إعدادات Firebase. يرجى إضافة النطاق الحالي إلى Authorized Domains.');
+        setError(`هذا النطاق (${window.location.hostname}) غير مصرح به في إعدادات Firebase. يرجى إضافته إلى Authorized Domains في وحدة تحكم Firebase.`);
+      } else if (errorCode === 'auth/network-request-failed') {
+        setError('فشل الاتصال بالشبكة. قد يكون ذلك بسبب ضعف الإنترنت، أو حظر المتصفح لملفات تعريف الارتباط للجهات الخارجية (Third-party cookies)، أو بسبب مانع إعلانات (AdBlocker). يرجى المحاولة مرة أخرى أو استخدام متصفح آخر.');
       } else {
         setError(`حدث خطأ أثناء تسجيل الدخول عبر جوجل (${errorCode})`);
       }
@@ -61,9 +71,11 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
       <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-indigo-600">تسجيل الدخول</h1>
-          <p className="text-slate-500 mt-2">مرحباً بك في نظام مراقبة الامتحانات</p>
+        <div className="flex flex-col items-center mb-8">
+          <Logo className="w-16 h-16" showText={false} />
+          <h1 className="text-3xl font-bold text-indigo-600 mt-4">تسجيل الدخول</h1>
+          <p className="text-slate-500 mt-2 text-center">مرحباً بك في نظام المراقبات الامتحانية</p>
+          <p className="text-xs text-slate-400 mt-1">جامعة دمشق كلية الهندسة المعمارية</p>
         </div>
 
         {error && (
@@ -124,6 +136,11 @@ export default function Login() {
                   placeholder="••••••••"
                 />
               </div>
+              <div className="mt-2 text-right">
+                <Link to="/forgot-password" className="text-xs text-indigo-600 hover:underline font-medium">
+                  هل نسيت كلمة السر؟
+                </Link>
+              </div>
             </div>
 
             <button
@@ -149,6 +166,20 @@ export default function Login() {
             إنشاء حساب جديد
           </Link>
         </p>
+
+        <div className="mt-8 pt-6 border-t text-center">
+          <p className="text-[10px] text-slate-400">
+            صمم هذا التطبيق بواسطة{' '}
+            <a 
+              href="https://www.facebook.com/amir.aldeen.alhammami/?locale=ar_AR" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-indigo-500 hover:underline font-medium"
+            >
+              م.أمير الدين الحمامي
+            </a>
+          </p>
+        </div>
       </div>
     </div>
   );

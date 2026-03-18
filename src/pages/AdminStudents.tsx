@@ -1,12 +1,71 @@
 import React, { useEffect, useState } from 'react';
 import { collection, onSnapshot, query, where, doc, updateDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useAuth } from '../contexts/AuthContext';
 import { UserProfile, Booking, AppSettings } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
-import { Search, Mail, Phone, IdCard, Clock, ExternalLink, Loader2, Edit2, Download, Trash2, ChevronDown, CheckCircle2, XCircle, MessageSquare } from 'lucide-react';
+import { Search, Mail, Phone, IdCard, Clock, Loader2, Edit2, Download, Trash2, ChevronDown, CheckCircle2, XCircle, MessageSquare, Save, Image as ImageIcon } from 'lucide-react';
+
+// Admin Note Input Component for better state management
+const AdminNoteInput = ({ 
+  initialValue, 
+  onSave 
+}: { 
+  initialValue: string, 
+  onSave: (val: string) => void 
+}) => {
+  const [value, setValue] = useState(initialValue);
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
+
+  useEffect(() => {
+    setValue(initialValue);
+    setHasChanges(false);
+  }, [initialValue]);
+
+  const handleSave = async () => {
+    if (!hasChanges) return;
+    setIsSaving(true);
+    try {
+      await onSave(value);
+      setHasChanges(false);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="relative group">
+      <MessageSquare size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      <input 
+        type="text"
+        placeholder="ملاحظة للطالب..."
+        value={value}
+        onChange={(e) => {
+          setValue(e.target.value);
+          setHasChanges(true);
+        }}
+        onBlur={handleSave}
+        onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+        className="w-full text-xs bg-slate-50 border border-slate-100 rounded-xl pr-9 pl-10 py-2 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+      />
+      {hasChanges && (
+        <button 
+          onClick={handleSave}
+          className="absolute left-2 top-1/2 -translate-y-1/2 text-indigo-600 hover:text-indigo-800 p-1"
+          title="حفظ"
+        >
+          {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+        </button>
+      )}
+    </div>
+  );
+};
 
 export default function AdminStudents() {
+  const { profile, isSuperAdmin } = useAuth();
   const [students, setStudents] = useState<UserProfile[]>([]);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -14,24 +73,40 @@ export default function AdminStudents() {
   const [globalSettings, setGlobalSettings] = useState<AppSettings | null>(null);
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
   const [updatingBooking, setUpdatingBooking] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'active' | 'pending' | 'frozen'>('active');
+  const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!profile?.uid) return;
+
     const fetchSettings = async () => {
       try {
         const docSnap = await getDoc(doc(db, 'settings', 'global'));
         if (docSnap.exists()) {
-          setGlobalSettings(docSnap.data() as AppSettings);
+          const data = docSnap.data() as AppSettings;
+          setGlobalSettings({
+            registration_open: data.registration_open ?? true,
+            registration_start: data.registration_start ?? '',
+            registration_end: data.registration_end ?? '',
+            exam_start: data.exam_start ?? '',
+            exam_end: data.exam_end ?? '',
+            default_required_hours: data.default_required_hours ?? 16,
+          });
         }
       } catch (error) {
         handleFirestoreError(error, OperationType.GET, 'settings/global');
       }
     };
     fetchSettings();
-  }, []);
+  }, [profile?.uid]);
 
   useEffect(() => {
-    const unsubscribeStudents = onSnapshot(query(collection(db, 'users'), where('role', '==', 'student')), (snapshot) => {
-      setStudents(snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile)));
+    if (!profile?.uid) return;
+
+    const unsubscribeStudents = onSnapshot(query(collection(db, 'users')), (snapshot) => {
+      const users = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
+      setAllUsers(users);
+      setStudents(users.filter(u => u.role === 'student' && u.email !== "amiraldeenalhammami@ab3adacademy.com"));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'users');
     });
@@ -47,7 +122,7 @@ export default function AdminStudents() {
       unsubscribeStudents();
       unsubscribeBookings();
     };
-  }, []);
+  }, [profile?.uid]);
 
   const handleDownloadCSV = () => {
     const headers = ['الاسم', 'الرقم الجامعي', 'القسم', 'البريد', 'الهاتف', 'الساعات المنجزة', 'الساعات المطلوبة'];
@@ -165,10 +240,72 @@ export default function AdminStudents() {
     }
   };
 
-  const filteredStudents = students.filter(s => 
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    s.university_id?.includes(searchTerm)
-  );
+  const handleActivateStudent = async (student: UserProfile) => {
+    if (student.requested_role === 'admin' && !isSuperAdmin) {
+      alert('فقط السوبر أدمن يمكنه الموافقة على طلبات المدراء');
+      return;
+    }
+
+    if (student.requested_role === 'admin') {
+      const currentAdmins = allUsers.filter(u => u.role === 'admin' || u.email === "amiraldeenalhammami@ab3adacademy.com").length;
+      if (currentAdmins >= 5) {
+        alert('لا يمكن تجاوز الحد الأقصى وهو 5 مدراء');
+        return;
+      }
+    }
+
+    setUpdatingStatus(student.uid);
+    try {
+      await updateDoc(doc(db, 'users', student.uid), {
+        status: 'active',
+        role: student.requested_role === 'admin' ? 'admin' : 'student'
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${student.uid}`);
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
+
+  const handleFreezeStudent = async (uid: string) => {
+    setUpdatingStatus(uid);
+    try {
+      await updateDoc(doc(db, 'users', uid), {
+        status: 'frozen'
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${uid}`);
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
+
+  const handleUpdateAdminNote = async (uid: string, note: string) => {
+    try {
+      await updateDoc(doc(db, 'users', uid), {
+        admin_note: note
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${uid}`);
+    }
+  };
+
+  const studentIds = new Set(students.map(s => s.uid));
+  const studentBookings = bookings.filter(b => studentIds.has(b.student_id));
+
+  const filteredStudents = students.filter(s => {
+    const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                         s.university_id?.includes(searchTerm);
+    let matchesTab = false;
+    if (activeTab === 'active') {
+      matchesTab = s.status === 'active';
+    } else if (activeTab === 'pending') {
+      matchesTab = s.status === 'pending' || !s.status;
+    } else if (activeTab === 'frozen') {
+      matchesTab = s.status === 'frozen';
+    }
+    return matchesSearch && matchesTab;
+  });
 
   if (loading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="animate-spin text-indigo-600" size={40} /></div>;
@@ -199,6 +336,40 @@ export default function AdminStudents() {
         </div>
       </header>
 
+      <div className="flex gap-4 border-b border-slate-200">
+        <button
+          onClick={() => setActiveTab('active')}
+          className={`pb-4 px-2 font-bold transition-all relative ${activeTab === 'active' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+        >
+          الطلاب النشطون
+          {activeTab === 'active' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 rounded-t-full" />}
+        </button>
+        <button
+          onClick={() => setActiveTab('pending')}
+          className={`pb-4 px-2 font-bold transition-all relative ${activeTab === 'pending' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+        >
+          طلبات معلقة
+          {students.filter(s => s.status === 'pending' || !s.status).length > 0 && (
+            <span className="mr-2 bg-rose-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+              {students.filter(s => s.status === 'pending' || !s.status).length}
+            </span>
+          )}
+          {activeTab === 'pending' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 rounded-t-full" />}
+        </button>
+        <button
+          onClick={() => setActiveTab('frozen')}
+          className={`pb-4 px-2 font-bold transition-all relative ${activeTab === 'frozen' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+        >
+          الطلاب المجمدون
+          {students.filter(s => s.status === 'frozen').length > 0 && (
+            <span className="mr-2 bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+              {students.filter(s => s.status === 'frozen').length}
+            </span>
+          )}
+          {activeTab === 'frozen' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 rounded-t-full" />}
+        </button>
+      </div>
+
       <div className="relative max-w-md">
         <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
         <input
@@ -215,17 +386,17 @@ export default function AdminStudents() {
           <thead>
             <tr className="bg-slate-50 text-slate-500 text-sm">
               <th className="px-6 py-4 font-medium">الطالب</th>
+              <th className="px-6 py-4 font-medium text-center">ملاحظة الطالب</th>
               <th className="px-6 py-4 font-medium">البيانات الجامعية</th>
-              <th className="px-6 py-4 font-medium">التواصل</th>
               <th className="px-6 py-4 font-medium">الساعات (منجز / مطلوب)</th>
-              <th className="px-6 py-4 font-medium">المستندات</th>
+              <th className="px-6 py-4 font-medium">ملاحظة الأدمن</th>
               <th className="px-6 py-4 font-medium">الإجراءات</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filteredStudents.map((student) => {
-              const studentBookings = bookings.filter(b => b.student_id === student.uid);
-              const studentHours = studentBookings.reduce((acc, curr) => acc + curr.booked_hours, 0);
+              const currentStudentBookings = studentBookings.filter(b => b.student_id === student.uid);
+              const studentHours = currentStudentBookings.reduce((acc, curr) => acc + curr.booked_hours, 0);
               const required = student.required_hours || globalSettings?.default_required_hours || 16;
               const isExpanded = expandedStudent === student.uid;
 
@@ -240,22 +411,40 @@ export default function AdminStudents() {
                         >
                           <ChevronDown size={20} />
                         </button>
-                        <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold overflow-hidden">
-                          {student.photo ? <img src={student.photo} className="w-full h-full object-cover" /> : student.name.charAt(0)}
+                        <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 text-xl font-bold overflow-hidden border border-slate-100">
+                          {student.profile_image_url ? (
+                            <img src={student.profile_image_url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            student.avatar_emoji || student.name.charAt(0)
+                          )}
                         </div>
-                        <span className="font-bold text-slate-900">{student.name}</span>
+                        <div className="flex flex-col">
+                          <span className="font-bold text-slate-900 flex items-center gap-2">
+                            {student.name}
+                            {student.status === 'pending' && student.requested_role === 'admin' && (
+                              <span className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">طلب مدير</span>
+                            )}
+                            {student.status === 'pending' && student.requested_role === 'student' && (
+                              <span className="bg-emerald-100 text-emerald-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">طلب طالب</span>
+                            )}
+                          </span>
+                          <span className="text-[10px] text-slate-400">{student.email}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="max-w-[150px] mx-auto text-center">
+                        {student.student_note ? (
+                          <p className="text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg italic">"{student.student_note}"</p>
+                        ) : (
+                          <span className="text-[10px] text-slate-300">لا توجد ملاحظة</span>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col text-sm text-slate-600">
                         <span className="flex items-center gap-1"><IdCard size={14} /> {student.university_id}</span>
                         <span className="text-xs text-slate-400">{student.department}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col text-sm text-slate-600">
-                        <span className="flex items-center gap-1"><Mail size={14} /> {student.email}</span>
-                        <span className="flex items-center gap-1"><Phone size={14} /> {student.phone}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -275,34 +464,60 @@ export default function AdminStudents() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      {student.student_card_image && (
-                        <a 
-                          href={student.student_card_image} 
-                          target="_blank" 
-                          rel="noreferrer"
-                          className="text-indigo-600 hover:underline text-xs flex items-center gap-1"
-                        >
-                          البطاقة الجامعية <ExternalLink size={12} />
-                        </a>
-                      )}
+                      <AdminNoteInput 
+                        initialValue={student.admin_note || ''} 
+                        onSave={(val) => handleUpdateAdminNote(student.uid, val)} 
+                      />
                     </td>
                     <td className="px-6 py-4">
-                      <button 
-                        onClick={() => handleDeleteStudent(student.uid)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors"
-                        title="حذف الطالب نهائياً"
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {(student.status === 'pending' || !student.status || student.status === 'frozen') && (
+                          <button 
+                            onClick={() => handleActivateStudent(student)}
+                            disabled={updatingStatus === student.uid}
+                            className="flex items-center gap-1 bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                          >
+                            {updatingStatus === student.uid ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                            <span>تفعيل {student.requested_role === 'admin' ? '(مدير)' : ''}</span>
+                          </button>
+                        )}
+                        {student.status === 'active' && (
+                          <button 
+                            onClick={() => handleFreezeStudent(student.uid)}
+                            disabled={updatingStatus === student.uid}
+                            className="flex items-center gap-1 bg-amber-50 text-amber-600 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-amber-100 transition-colors disabled:opacity-50"
+                          >
+                            {updatingStatus === student.uid ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
+                            <span>تجميد الطالب</span>
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => handleDeleteStudent(student.uid)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                          title="حذف الطالب نهائياً"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                   
                   {isExpanded && (
                     <tr>
-                      <td colSpan={6} className="px-6 py-4 bg-slate-50/50">
+                      <td colSpan={5} className="px-6 py-4 bg-slate-50/50">
                         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden animate-in slide-in-from-top-2 duration-200">
-                          <div className="p-4 border-b border-slate-50 bg-slate-50/30">
+                          <div className="p-4 border-b border-slate-50 bg-slate-50/30 flex justify-between items-center">
                             <h4 className="font-bold text-slate-700 text-sm">سجل فترات المراقبة والالتزام</h4>
+                            {student.id_card_image_url && (
+                              <a 
+                                href={student.id_card_image_url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-xs text-indigo-600 hover:underline flex items-center gap-1"
+                              >
+                                <ImageIcon size={14} /> عرض صورة البطاقة الجامعية
+                              </a>
+                            )}
                           </div>
                           <div className="divide-y divide-slate-50">
                             {studentBookings.length > 0 ? (

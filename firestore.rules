@@ -33,12 +33,18 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() &&
         (request.auth.token.email == "amiraldeenalhammami@ab3adacademy.com" || 
-         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+         request.auth.uid == "44tKjSuzLiM8bjP5Ot4a51sQuH33" ||
+         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() &&
+        (request.auth.token.email == "amiraldeenalhammami@ab3adacademy.com" || 
+         request.auth.uid == "44tKjSuzLiM8bjP5Ot4a51sQuH33");
     }
 
     function isValidUser(data) {
-      let allowedFields = ['name', 'email', 'phone', 'university_id', 'department', 'role', 'photo', 'student_card_image', 'required_hours', 'createdAt'];
+      let allowedFields = ['name', 'email', 'phone', 'university_id', 'department', 'role', 'requested_role', 'photo', 'student_card_image', 'required_hours', 'createdAt', 'status', 'admin_note', 'student_note', 'profile_image_url', 'id_card_image_url'];
       return data.keys().hasOnly(allowedFields) &&
              data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
@@ -60,9 +66,15 @@ service cloud.firestore {
     }
 
     function isValidSettings(data) {
-      return data.keys().hasOnly(['registration_open', 'registration_start', 'registration_end', 'default_required_hours']) &&
+      let allowedFields = ['registration_open', 'registration_start', 'registration_end', 'exam_start', 'exam_end', 'default_required_hours', 'app_logo_url'];
+      return data.keys().hasOnly(allowedFields) &&
              data.registration_open is bool &&
              (data.default_required_hours is number || !('default_required_hours' in data));
+    }
+
+    function isRegistrationOpen() {
+      let settingsPath = /databases/$(database)/documents/settings/global;
+      return !exists(settingsPath) || get(settingsPath).data.registration_open == true;
     }
 
     // ===============================================================
@@ -71,27 +83,26 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && userId == request.auth.uid && isValidUser(request.resource.data) && request.resource.data.role == 'student';
-      allow update: if isAuthenticated() && (userId == request.auth.uid || isAdmin()) && isValidUser(request.resource.data) && 
-                    (isAdmin() || request.resource.data.role == resource.data.role);
+      allow create: if isAuthenticated() && userId == request.auth.uid && request.resource.data.role == 'student';
+      allow update: if isAuthenticated() && (userId == request.auth.uid || isAdmin()) && 
+                    (request.resource.data.role == resource.data.role || isSuperAdmin());
       allow delete: if isAdmin();
     }
 
     match /exam_slots/{slotId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAdmin() && isValidExamSlot(request.resource.data);
-      allow delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     match /bookings/{bookingId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && (isAdmin() || isValidBooking(request.resource.data));
+      allow create: if isAuthenticated() && (isAdmin() || (request.resource.data.student_id == request.auth.uid && isRegistrationOpen()));
       allow update: if isAdmin();
-      allow delete: if isAuthenticated() && (resource.data.student_id == request.auth.uid || isAdmin());
+      allow delete: if isAuthenticated() && (isAdmin() || (resource.data.student_id == request.auth.uid && isRegistrationOpen()));
     }
 
     match /settings/{settingId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create, update: if isAdmin() && isValidSettings(request.resource.data);
       allow delete: if isAdmin();
     }

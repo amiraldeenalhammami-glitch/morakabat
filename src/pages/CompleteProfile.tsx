@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { auth, db, storage } from '../firebase';
+import { auth, db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
+import { getRandomEmoji } from '../utils/emojis';
 import { User, Phone, IdCard, Building, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function CompleteProfile() {
@@ -13,8 +13,6 @@ export default function CompleteProfile() {
     university_id: '',
     department: '',
   });
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [idCard, setIdCard] = useState<File | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingText, setLoadingText] = useState('');
@@ -46,63 +44,21 @@ export default function CompleteProfile() {
     console.log('Submit started. User:', user.uid);
 
     try {
-      let photoUrl = user.photoURL || '';
-      let idCardUrl = '';
-
-      // Upload Photo
-      if (photo) {
-        if (photo.size > 5 * 1024 * 1024) {
-          throw new Error('حجم الصورة الشخصية كبير جداً. يرجى اختيار صورة أقل من 5 ميجابايت.');
-        }
-        setLoadingText('جاري رفع الصورة الشخصية...');
-        console.log('Uploading photo:', photo.name);
-        try {
-          const photoRef = ref(storage, `users/${user.uid}/photo`);
-          
-          // Manual timeout for upload
-          const uploadPromise = uploadBytes(photoRef, photo);
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('انتهت مهلة رفع الصورة الشخصية. يرجى التحقق من اتصالك بالإنترنت.')), 30000)
-          );
-          
-          const uploadTask = await Promise.race([uploadPromise, timeoutPromise]) as any;
-          photoUrl = await getDownloadURL(uploadTask.ref);
-          console.log('Photo uploaded:', photoUrl);
-        } catch (uploadErr: any) {
-          console.error('Photo upload error:', uploadErr);
-          throw new Error(`فشل رفع الصورة الشخصية: ${uploadErr.message}`);
-        }
-      }
-
-      // Upload ID Card
-      if (idCard) {
-        if (idCard.size > 5 * 1024 * 1024) {
-          throw new Error('حجم صورة البطاقة كبير جداً. يرجى اختيار صورة أقل من 5 ميجابايت.');
-        }
-        setLoadingText('جاري رفع صورة البطاقة الجامعية...');
-        console.log('Uploading ID card:', idCard.name);
-        try {
-          const idCardRef = ref(storage, `users/${user.uid}/id_card`);
-          
-          // Manual timeout for upload
-          const uploadPromise = uploadBytes(idCardRef, idCard);
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('انتهت مهلة رفع صورة البطاقة. يرجى التحقق من اتصالك بالإنترنت.')), 30000)
-          );
-          
-          const uploadTask = await Promise.race([uploadPromise, timeoutPromise]) as any;
-          idCardUrl = await getDownloadURL(uploadTask.ref);
-          console.log('ID card uploaded:', idCardUrl);
-        } catch (uploadErr: any) {
-          console.error('ID card upload error:', uploadErr);
-          throw new Error(`فشل رفع صورة البطاقة: ${uploadErr.message}`);
-        }
-      }
-
       // Save Profile to Firestore
       setLoadingText('جاري حفظ البيانات النهائية...');
       console.log('Saving to Firestore...');
       try {
+        // Fetch default hours from settings
+        let defaultHours = 16;
+        try {
+          const settingsSnap = await getDoc(doc(db, 'settings', 'global'));
+          if (settingsSnap.exists()) {
+            defaultHours = settingsSnap.data().default_required_hours || 16;
+          }
+        } catch (sErr) {
+          console.error('Error fetching default hours:', sErr);
+        }
+
         const userData = {
           name: user.displayName || 'مستخدم جديد',
           email: user.email || '',
@@ -110,9 +66,8 @@ export default function CompleteProfile() {
           university_id: formData.university_id,
           department: formData.department,
           role: 'student',
-          photo: photoUrl,
-          student_card_image: idCardUrl,
-          required_hours: 16,
+          avatar_emoji: getRandomEmoji(),
+          required_hours: defaultHours,
           createdAt: new Date().toISOString(),
         };
         
@@ -158,11 +113,6 @@ export default function CompleteProfile() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="bg-blue-50 p-4 rounded-2xl text-blue-700 text-sm flex items-start gap-3 mb-4">
-            <AlertCircle className="shrink-0 mt-0.5" size={18} />
-            <p>ملاحظة: إذا واجهت مشكلة في رفع الصور أو كان الإنترنت بطيئاً، يمكنك ترك حقول الصور فارغة وإكمال التسجيل مباشرة.</p>
-          </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">رقم الهاتف</label>
@@ -213,27 +163,6 @@ export default function CompleteProfile() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">الصورة الشخصية (اختياري)</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setPhoto(e.target.files?.[0] || null)}
-                className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">صورة البطاقة الجامعية (اختياري)</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setIdCard(e.target.files?.[0] || null)}
-                className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-              />
-            </div>
-          </div>
-
           <button
             type="submit"
             disabled={loading}
@@ -249,6 +178,20 @@ export default function CompleteProfile() {
             )}
           </button>
         </form>
+
+        <div className="mt-8 pt-6 border-t text-center">
+          <p className="text-[10px] text-slate-400">
+            صمم هذا التطبيق بواسطة{' '}
+            <a 
+              href="https://www.facebook.com/amir.aldeen.alhammami/?locale=ar_AR" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-indigo-500 hover:underline font-medium"
+            >
+              م.أمير الدين الحمامي
+            </a>
+          </p>
+        </div>
       </div>
     </div>
   );
