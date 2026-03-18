@@ -11,6 +11,17 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      window.deferredPrompt = null;
+      window.addEventListener('beforeinstallprompt', (e) => {
+        // Prevent the mini-infobar from appearing on mobile
+        e.preventDefault();
+        // Stash the event so it can be triggered later.
+        window.deferredPrompt = e;
+        // Dispatch a custom event to notify React components if they are already mounted
+        window.dispatchEvent(new CustomEvent('pwa-prompt-available'));
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
