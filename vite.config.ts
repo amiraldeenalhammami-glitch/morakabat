@@ -26,8 +26,6 @@ export default defineConfig(({mode}) => {
       {
         name: 'api-server',
         configureServer(server) {
-          server.middlewares.use(express.json());
-
           // Initialize local SQLite database for OTPs
           const db = new Database('otps.db');
           db.exec(`
@@ -38,19 +36,41 @@ export default defineConfig(({mode}) => {
             )
           `);
 
+          const sendJSON = (res: any, data: any, status = 200) => {
+            res.statusCode = status;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(data));
+          };
+
+          const getBody = async (req: any) => {
+            if (req.body) return req.body;
+            return new Promise((resolve) => {
+              let body = '';
+              req.on('data', (chunk) => body += chunk);
+              req.on('end', () => {
+                try {
+                  resolve(body ? JSON.parse(body) : {});
+                } catch (e) {
+                  resolve({});
+                }
+              });
+            });
+          };
+
           server.middlewares.use(async (req, res, next) => {
-            if (req.url === '/api/health') {
-              res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify({ status: 'ok' }));
+            const url = req.url?.split('?')[0];
+
+            if (url === '/api/health') {
+              sendJSON(res, { status: 'ok' });
               return;
             }
 
-            if (req.url === '/api/send-otp' && req.method === 'POST') {
+            if (url === '/api/send-otp' && req.method === 'POST') {
               try {
-                const { email } = (req as any).body;
+                const body = await getBody(req);
+                const { email } = body;
                 if (!email) {
-                  res.statusCode = 400;
-                  res.end(JSON.stringify({ error: "Email is required" }));
+                  sendJSON(res, { error: "البريد الإلكتروني مطلوب" }, 400);
                   return;
                 }
                 
@@ -77,23 +97,20 @@ export default defineConfig(({mode}) => {
                     text: `رمزك هو: ${otp}`
                   });
                 }
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ success: true }));
+                sendJSON(res, { success: true });
               } catch (err: any) {
                 console.error('Error in /api/send-otp:', err);
-                res.statusCode = 500;
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ error: err.message }));
+                sendJSON(res, { error: err.message }, 500);
               }
               return;
             }
 
-            if (req.url === '/api/verify-otp' && req.method === 'POST') {
+            if (url === '/api/verify-otp' && req.method === 'POST') {
               try {
-                const { email, otp } = (req as any).body;
+                const body = await getBody(req);
+                const { email, otp } = body;
                 if (!email || !otp) {
-                  res.statusCode = 400;
-                  res.end(JSON.stringify({ error: "Email and OTP are required" }));
+                  sendJSON(res, { error: "البريد الإلكتروني والرمز مطلوبان" }, 400);
                   return;
                 }
                 
@@ -105,28 +122,23 @@ export default defineConfig(({mode}) => {
                 }
 
                 if (isValid) {
-                  res.setHeader('Content-Type', 'application/json');
-                  res.end(JSON.stringify({ success: true }));
+                  sendJSON(res, { success: true });
                 } else {
-                  res.statusCode = 400;
-                  res.setHeader('Content-Type', 'application/json');
-                  res.end(JSON.stringify({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته" }));
+                  sendJSON(res, { error: "رمز التحقق غير صحيح أو انتهت صلاحيته" }, 400);
                 }
               } catch (err: any) {
                 console.error('Error in /api/verify-otp:', err);
-                res.statusCode = 500;
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ error: err.message }));
+                sendJSON(res, { error: err.message }, 500);
               }
               return;
             }
 
-            if (req.url === '/api/reset-password' && req.method === 'POST') {
+            if (url === '/api/reset-password' && req.method === 'POST') {
               try {
-                const { email, otp, newPassword } = (req as any).body;
+                const body = await getBody(req);
+                const { email, otp, newPassword } = body;
                 if (!email || !otp || !newPassword) {
-                  res.statusCode = 400;
-                  res.end(JSON.stringify({ error: "Email, OTP, and new password are required" }));
+                  sendJSON(res, { error: "جميع الحقول مطلوبة" }, 400);
                   return;
                 }
 
@@ -140,9 +152,7 @@ export default defineConfig(({mode}) => {
                 }
 
                 if (!isValid) {
-                  res.statusCode = 400;
-                  res.setHeader('Content-Type', 'application/json');
-                  res.end(JSON.stringify({ error: "رمز التحقق غير صحيح أو انتهت صلاحيته" }));
+                  sendJSON(res, { error: "رمز التحقق غير صحيح أو انتهت صلاحيته" }, 400);
                   return;
                 }
 
@@ -155,13 +165,10 @@ export default defineConfig(({mode}) => {
                 } catch (authErr: any) {
                   console.error('Auth Error in reset-password:', authErr);
                   if (authErr.code === 'auth/user-not-found') {
-                    res.statusCode = 404;
-                    res.setHeader('Content-Type', 'application/json');
-                    res.end(JSON.stringify({ error: "البريد الإلكتروني غير مسجل في النظام" }));
+                    sendJSON(res, { error: "البريد الإلكتروني غير مسجل في النظام" }, 404);
                     return;
                   }
                   
-                  // Check for disabled Identity Toolkit API
                   const isApiDisabled = authErr.message && (
                     authErr.message.includes('identitytoolkit.googleapis.com') ||
                     authErr.message.includes('SERVICE_DISABLED') ||
@@ -169,24 +176,19 @@ export default defineConfig(({mode}) => {
                   );
 
                   if (isApiDisabled) {
-                    res.statusCode = 403;
-                    res.setHeader('Content-Type', 'application/json');
-                    res.end(JSON.stringify({ 
-                      error: "خدمة Identity Toolkit API غير مفعلة في مشروعك. يرجى تفعيلها من لوحة تحكم Google Cloud (الرابط موجود في سجلات الخادم) ثم المحاولة بعد 5 دقائق." 
-                    }));
+                    sendJSON(res, { 
+                      error: "خدمة Identity Toolkit API غير مفعلة في مشروعك. يرجى تفعيلها من لوحة تحكم Google Cloud ثم المحاولة بعد 5 دقائق." 
+                    }, 403);
                     return;
                   }
                   
                   throw authErr;
                 }
 
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ success: true }));
+                sendJSON(res, { success: true });
               } catch (err: any) {
                 console.error('Error in /api/reset-password:', err);
-                res.statusCode = 500;
-                res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify({ error: err.message }));
+                sendJSON(res, { error: err.message }, 500);
               }
               return;
             }

@@ -31,5 +31,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, adminO
     return <Navigate to="/dashboard" replace />;
   }
 
+  // If user is admin but on a student route (specifically /dashboard), redirect to /admin
+  if (!adminOnly && isAdmin && location.pathname === '/dashboard') {
+    return <Navigate to="/admin" replace />;
+  }
+
   return <>{children}</>;
 };

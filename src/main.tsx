@@ -17,6 +17,16 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+// Global PWA Install Prompt Handler
+window.addEventListener('beforeinstallprompt', (e) => {
+  // Prevent the mini-infobar from appearing on mobile
+  e.preventDefault();
+  // Stash the event so it can be triggered later.
+  (window as any).deferredPrompt = e;
+  // Notify any listeners that the prompt is available
+  window.dispatchEvent(new CustomEvent('pwa-prompt-available'));
+});
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
