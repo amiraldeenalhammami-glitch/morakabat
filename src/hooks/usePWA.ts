@@ -15,6 +15,7 @@ export const usePWA = () => {
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
+      console.log('beforeinstallprompt event fired');
       // Prevent the mini-infobar from appearing on mobile
       e.preventDefault();
       // Stash the event so it can be triggered later.
