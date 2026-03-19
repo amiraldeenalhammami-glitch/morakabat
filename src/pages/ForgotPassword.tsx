@@ -28,6 +28,8 @@ export default function ForgotPassword() {
         setError('البريد الإلكتروني غير مسجل في النظام');
       } else if (err.code === 'auth/invalid-email') {
         setError('البريد الإلكتروني غير صالح');
+      } else if (err.code === 'auth/internal-error') {
+        setError('حدث خطأ داخلي في الخادم. يرجى التأكد من اتصالك بالإنترنت والمحاولة مرة أخرى.');
       } else {
         setError('حدث خطأ أثناء إرسال رابط إعادة التعيين. يرجى المحاولة مرة أخرى.');
       }

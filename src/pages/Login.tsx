@@ -38,6 +38,8 @@ export default function Login() {
         setError('خطأ في البريد الإلكتروني أو كلمة المرور. يرجى التأكد من البيانات والمحاولة مرة أخرى.');
       } else if (errorCode === 'auth/too-many-requests') {
         setError('تم حظر المحاولات مؤقتاً بسبب كثرة محاولات تسجيل الدخول الفاشلة. يرجى المحاولة لاحقاً.');
+      } else if (errorCode === 'auth/internal-error') {
+        setError('حدث خطأ داخلي في الخادم. يرجى التأكد من اتصالك بالإنترنت والمحاولة مرة أخرى.');
       } else {
         setError('حدث خطأ أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى.');
       }
@@ -67,6 +69,8 @@ export default function Login() {
         setError('تم حظر النافذة المنبثقة. يرجى السماح بالمنبثقات لهذا الموقع.');
       } else if (errorCode === 'auth/unauthorized-domain') {
         setError(`هذا النطاق (${window.location.hostname}) غير مصرح به في إعدادات Firebase. يرجى إضافته إلى Authorized Domains في وحدة تحكم Firebase.`);
+      } else if (errorCode === 'auth/account-exists-with-different-credential') {
+        setError('هذا البريد الإلكتروني مسجل بالفعل بطريقة دخول مختلفة (مثلاً عبر البريد وكلمة المرور). يرجى تسجيل الدخول بالطريقة التي استخدمتها سابقاً.');
       } else if (errorCode === 'auth/network-request-failed') {
         setError('فشل الاتصال بالشبكة. قد يكون ذلك بسبب ضعف الإنترنت، أو حظر المتصفح لملفات تعريف الارتباط للجهات الخارجية (Third-party cookies)، أو بسبب مانع إعلانات (AdBlocker). يرجى المحاولة مرة أخرى أو استخدام متصفح آخر.');
       } else {

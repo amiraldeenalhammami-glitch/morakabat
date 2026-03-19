@@ -92,9 +92,13 @@ export default function Register() {
       setTimeout(() => navigate('/login'), 6000);
     } catch (err: any) {
       console.error(err);
-      if (err.code === 'auth/email-already-in-use') {
+      const errorCode = err.code || '';
+      
+      if (errorCode === 'auth/email-already-in-use' || err.message?.includes('auth/email-already-in-use')) {
         setError('هذا البريد الإلكتروني مسجل لدينا بالفعل.');
         setIsEmailInUse(true);
+      } else if (errorCode === 'auth/internal-error' || err.message?.includes('auth/internal-error')) {
+        setError('حدث خطأ داخلي في الخادم. يرجى التأكد من اتصالك بالإنترنت والمحاولة مرة أخرى.');
       } else {
         setError('حدث خطأ أثناء إنشاء الحساب. يرجى المحاولة مرة أخرى.');
       }
