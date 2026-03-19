@@ -20,7 +20,16 @@ export default function Login() {
     setLoading(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      if (!user.emailVerified) {
+        setError('يرجى تفعيل حسابك من خلال الرابط المرسل إلى بريدك الإلكتروني قبل تسجيل الدخول.');
+        await auth.signOut();
+        setLoading(false);
+        return;
+      }
+
       navigate('/');
     } catch (err: any) {
       console.error(err);

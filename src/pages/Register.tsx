@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { UserPlus, Mail, Lock, User, Phone, IdCard, Building, AlertCircle, Camera, Image as ImageIcon, CheckCircle } from 'lucide-react';
@@ -20,19 +20,20 @@ export default function Register() {
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [idCardImage, setIdCardImage] = useState<File | null>(null);
   const [error, setError] = useState('');
+  const [isEmailInUse, setIsEmailInUse] = useState(false);
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState<'form' | 'otp'>('form');
-  const [otp, setOtp] = useState('');
-  const [otpError, setOtpError] = useState('');
   const navigate = useNavigate();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSendOTP = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsEmailInUse(false);
+    setSuccess('');
 
     if (formData.password.length < 6) {
       setError('يجب أن تكون كلمة المرور 6 أحرف على الأقل');
@@ -40,52 +41,16 @@ export default function Register() {
     }
 
     setLoading(true);
-
-    try {
-      const response = await fetch('/api/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: formData.email }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'فشل إرسال رمز التحقق');
-
-      setStep('otp');
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOTP = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setOtpError('');
-    setLoading(true);
-
-    try {
-      const response = await fetch('/api/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: formData.email, otp }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'رمز التحقق غير صحيح');
-
-      // If OTP is verified, proceed with registration
-      await completeRegistration();
-    } catch (err: any) {
-      setOtpError(err.message);
-      setLoading(false);
-    }
+    await completeRegistration();
   };
 
   const completeRegistration = async () => {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
       const user = userCredential.user;
+
+      // Send verification email
+      await sendEmailVerification(user);
 
       let profileImageUrl = '';
       let idCardImageUrl = '';
@@ -123,15 +88,16 @@ export default function Register() {
         createdAt: new Date().toISOString(),
       });
 
-      navigate('/');
+      setSuccess('تم إنشاء الحساب بنجاح! تم إرسال رابط التحقق إلى بريدك الإلكتروني. يرجى تفعيل الحساب قبل تسجيل الدخول.');
+      setTimeout(() => navigate('/login'), 6000);
     } catch (err: any) {
       console.error(err);
       if (err.code === 'auth/email-already-in-use') {
-        setError('هذا الحساب مسجل بالفعل مسبقاً. يرجى تسجيل الدخول بدلاً من إنشاء حساب جديد.');
+        setError('هذا البريد الإلكتروني مسجل لدينا بالفعل.');
+        setIsEmailInUse(true);
       } else {
         setError('حدث خطأ أثناء إنشاء الحساب. يرجى المحاولة مرة أخرى.');
       }
-    } finally {
       setLoading(false);
     }
   };
@@ -147,14 +113,33 @@ export default function Register() {
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-2xl flex items-center gap-3 text-sm">
-            <AlertCircle size={18} />
-            <span>{error}</span>
+          <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-2xl flex flex-col gap-3 text-sm">
+            <div className="flex items-center gap-3">
+              <AlertCircle size={18} />
+              <span>{error}</span>
+            </div>
+            {isEmailInUse && (
+              <div className="flex flex-col gap-2 mt-2 pt-3 border-t border-red-100">
+                <Link to="/forgot-password" className="text-indigo-600 font-bold hover:underline flex items-center gap-1">
+                  هل نسيت كلمة المرور؟
+                </Link>
+                <Link to="/login" className="text-indigo-600 font-bold hover:underline flex items-center gap-1">
+                  الذهاب لتسجيل الدخول
+                </Link>
+              </div>
+            )}
           </div>
         )}
 
-        {step === 'form' ? (
-          <form onSubmit={handleSendOTP} className="space-y-6">
+        {success && (
+          <div className="mb-6 p-4 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center gap-3 text-sm">
+            <CheckCircle size={18} />
+            <span>{success}</span>
+          </div>
+        )}
+
+        {!success ? (
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">الاسم الكامل</label>
@@ -330,66 +315,22 @@ export default function Register() {
               ) : (
                 <>
                   <UserPlus size={20} />
-                  <span>إرسال رمز التحقق</span>
+                  <span>إنشاء الحساب</span>
                 </>
               )}
             </button>
           </form>
         ) : (
-          <form onSubmit={handleVerifyOTP} className="space-y-6">
-            <div className="text-center">
-              <p className="text-slate-600 mb-4">تم إرسال رمز التحقق إلى: <span className="font-bold">{formData.email}</span></p>
+          <div className="text-center py-8">
+            <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle size={32} />
             </div>
-
-            {otpError && (
-              <div className="p-4 bg-red-50 text-red-600 rounded-2xl flex items-center gap-3 text-sm">
-                <AlertCircle size={18} />
-                <span>{otpError}</span>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">رمز التحقق (6 أرقام)</label>
-              <input
-                type="text"
-                required
-                maxLength={6}
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-center text-2xl tracking-[1em] font-bold"
-                placeholder="000000"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {loading ? (
-                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <span>تحقق وإنشاء الحساب</span>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleSendOTP}
-              disabled={loading}
-              className="w-full text-indigo-600 font-medium hover:underline transition-colors disabled:opacity-50"
-            >
-              إعادة إرسال الرمز
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setStep('form')}
-              className="w-full text-slate-500 font-medium hover:text-indigo-600 transition-colors"
-            >
-              العودة لتعديل البيانات
-            </button>
-          </form>
+            <h2 className="text-xl font-bold text-slate-800 mb-2">تم التسجيل بنجاح!</h2>
+            <p className="text-slate-600">يرجى التحقق من بريدك الإلكتروني لتفعيل الحساب قبل تسجيل الدخول.</p>
+            <Link to="/login" className="mt-6 inline-block text-indigo-600 font-bold hover:underline">
+              العودة لتسجيل الدخول
+            </Link>
+          </div>
         )}
 
         <p className="mt-8 text-center text-slate-600">
