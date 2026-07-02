@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { ExamSlot, Booking } from '../types';
+import { ExamSlot, Booking, AppSettings } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
-import { Plus, Trash2, Edit2, X, Check, Calendar, Clock, MapPin, Users, Loader2, User, Download } from 'lucide-react';
+import { Plus, Trash2, Edit2, X, Check, Calendar, Clock, MapPin, Users, Loader2, User, Download, Shield, AlertCircle } from 'lucide-react';
+import SecurityConfirmModal from '../components/SecurityConfirmModal';
 
 export default function AdminSlots() {
   const { profile } = useAuth();
@@ -14,6 +15,20 @@ export default function AdminSlots() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSlot, setEditingSlot] = useState<ExamSlot | null>(null);
   const [expandedYear, setExpandedYear] = useState<number | null>(1);
+  const [globalSettings, setGlobalSettings] = useState<AppSettings | null>(null);
+
+  // Security confirmation states
+  const [securityModalOpen, setSecurityModalOpen] = useState(false);
+  const [securityAction, setSecurityAction] = useState<{
+    onConfirm: () => void;
+    title: string;
+    description: string;
+  } | null>(null);
+
+  const requestSecurityConfirm = (onConfirm: () => void, title: string, description: string) => {
+    setSecurityAction({ onConfirm, title, description });
+    setSecurityModalOpen(true);
+  };
   const [formData, setFormData] = useState({
     course_name: '',
     exam_date: '',
@@ -46,6 +61,20 @@ export default function AdminSlots() {
       unsubscribeBookings();
     };
   }, [profile?.uid]);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const docSnap = await getDoc(doc(db, 'settings', 'global'));
+        if (docSnap.exists()) {
+          setGlobalSettings(docSnap.data() as AppSettings);
+        }
+      } catch (error) {
+        handleFirestoreError(error, OperationType.GET, 'settings/global');
+      }
+    };
+    fetchSettings();
+  }, []);
 
   const handleDownloadCSV = () => {
     const headers = ['المادة', 'السنة الدراسية', 'التاريخ', 'الوقت', 'الفترة', 'الموقع', 'المراقبون المحجوزون'];
@@ -125,17 +154,17 @@ export default function AdminSlots() {
 
   const handleClearAll = async () => {
     if (slots.length === 0) return;
+
     try {
       setLoading(true);
+      
       for (const slot of slots) {
         await deleteDoc(doc(db, 'exam_slots', slot.id));
       }
-      // Also clear bookings? User said "zero the program", usually means slots.
-      // But bookings are tied to slots. If slots are gone, bookings are orphaned.
-      // Better to clear bookings too if we are resetting.
       for (const booking of bookings) {
         await deleteDoc(doc(db, 'bookings', booking.id));
       }
+      alert('تم تصفير البرنامج بنجاح');
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, 'exam_slots/all');
     } finally {
@@ -174,7 +203,13 @@ export default function AdminSlots() {
         </div>
         <div className="flex gap-3">
           <button
-            onClick={handleClearAll}
+            onClick={() => {
+              requestSecurityConfirm(
+                handleClearAll,
+                'تصفير البرنامج الامتحاني',
+                'سيتم حذف جميع المواد المضافة وجميع حجوزات الطلاب نهائياً من النظام. يرجى إدخال كلمة المرور الموحدة للتأكيد.'
+              );
+            }}
             className="bg-red-50 text-red-600 px-6 py-3 rounded-2xl font-bold hover:bg-red-100 transition-colors flex items-center gap-2"
           >
             <Trash2 size={20} />
@@ -309,7 +344,14 @@ export default function AdminSlots() {
                                     <button onClick={() => openEdit(slot)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
                                       <Edit2 size={18} />
                                     </button>
-                                    <button onClick={() => handleDelete(slot.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                                    <button 
+                                      onClick={() => requestSecurityConfirm(
+                                        () => handleDelete(slot.id),
+                                        'حذف مادة',
+                                        `يرجى إدخال كلمة المرور الموحدة لتأكيد حذف مادة: ${slot.course_name}`
+                                      )} 
+                                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    >
                                       <Trash2 size={18} />
                                     </button>
                                   </div>
@@ -327,6 +369,20 @@ export default function AdminSlots() {
           );
         })}
       </div>
+
+      {/* Security Code Confirm Modal */}
+      {securityModalOpen && securityAction && (
+        <SecurityConfirmModal
+          isOpen={securityModalOpen}
+          onClose={() => {
+            setSecurityModalOpen(false);
+            setSecurityAction(null);
+          }}
+          onConfirm={securityAction.onConfirm}
+          title={securityAction.title}
+          description={securityAction.description}
+        />
+      )}
 
       {/* Modal */}
       {isModalOpen && (

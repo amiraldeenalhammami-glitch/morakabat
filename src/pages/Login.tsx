@@ -32,16 +32,20 @@ export default function Login() {
 
       navigate('/');
     } catch (err: any) {
-      console.error(err);
-      const errorCode = err.code;
+      console.error('Full Login Error:', err);
+      const errorCode = err.code || '';
+      const errorMessage = err.message || '';
+      
       if (errorCode === 'auth/invalid-credential' || errorCode === 'auth/wrong-password' || errorCode === 'auth/user-not-found') {
         setError('خطأ في البريد الإلكتروني أو كلمة المرور. يرجى التأكد من البيانات والمحاولة مرة أخرى.');
       } else if (errorCode === 'auth/too-many-requests') {
         setError('تم حظر المحاولات مؤقتاً بسبب كثرة محاولات تسجيل الدخول الفاشلة. يرجى المحاولة لاحقاً.');
       } else if (errorCode === 'auth/internal-error') {
         setError('حدث خطأ داخلي في الخادم. يرجى التأكد من اتصالك بالإنترنت والمحاولة مرة أخرى.');
+      } else if (errorCode === 'auth/network-request-failed') {
+        setError('فشل الاتصال بالخادم. يرجى التأكد من اتصالك بالإنترنت.');
       } else {
-        setError('حدث خطأ أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى.');
+        setError(`حدث خطأ أثناء تسجيل الدخول (${errorCode}): ${errorMessage}`);
       }
     } finally {
       setLoading(false);

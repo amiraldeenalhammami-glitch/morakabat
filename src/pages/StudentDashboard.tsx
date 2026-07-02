@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, where, onSnapshot, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, getDoc, updateDoc, orderBy, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { Booking, AppSettings } from '../types';
+import { Booking, AppSettings, GroupNote } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
-import { Clock, CheckCircle, AlertCircle, Calendar as CalendarIcon, MessageSquare, CheckCircle2, XCircle, Download } from 'lucide-react';
+import { Clock, CheckCircle, AlertCircle, Calendar as CalendarIcon, MessageSquare, CheckCircle2, XCircle, Download, Bell } from 'lucide-react';
 import { usePWA } from '../hooks/usePWA';
 
 export default function StudentDashboard() {
@@ -12,6 +12,7 @@ export default function StudentDashboard() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [globalSettings, setGlobalSettings] = useState<AppSettings | null>(null);
+  const [groupNotes, setGroupNotes] = useState<GroupNote[]>([]);
   const { canInstall, installApp } = usePWA();
 
   useEffect(() => {
@@ -48,6 +49,24 @@ export default function StudentDashboard() {
       setLoading(false);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'bookings');
+    });
+
+    return () => unsubscribe();
+  }, [profile?.uid]);
+
+  useEffect(() => {
+    if (!profile?.uid) return;
+
+    const q = query(
+      collection(db, 'group_notes'),
+      orderBy('timestamp', 'desc'),
+      limit(5)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setGroupNotes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroupNote)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'group_notes');
     });
 
     return () => unsubscribe();
@@ -158,8 +177,38 @@ export default function StudentDashboard() {
             <MessageSquare size={20} />
           </div>
           <div>
-            <p className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-1">ملاحظة من الإدارة</p>
+            <p className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-1">ملاحظة خاصة لك من الإدارة</p>
             <p className="font-medium">{profile.admin_note}</p>
+          </div>
+        </div>
+      )}
+
+      {groupNotes.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 px-2">
+            <Bell size={20} className="text-indigo-600" />
+            <h2 className="text-xl font-bold text-slate-900">ملاحظات جماعية من الإدارة</h2>
+          </div>
+          <div className="grid grid-cols-1 gap-4">
+            {groupNotes.map((note) => (
+              <div key={note.id} className="bg-white border border-slate-100 p-6 rounded-3xl flex items-start gap-4 shadow-sm relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-1 h-full bg-indigo-600"></div>
+                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+                  <MessageSquare size={24} />
+                </div>
+                <div className="flex-1">
+                  <div className="flex justify-between items-start mb-2">
+                    <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider">ملاحظة جماعية من: {note.admin_name}</p>
+                    {note.timestamp && (
+                      <span className="text-[10px] text-slate-400">
+                        {new Date(note.timestamp?.toDate()).toLocaleString('ar-EG')}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-slate-700 font-medium leading-relaxed whitespace-pre-wrap">{note.content}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

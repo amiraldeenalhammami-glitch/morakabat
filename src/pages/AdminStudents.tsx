@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, where, doc, updateDoc, getDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, doc, updateDoc, getDoc, deleteDoc, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { UserProfile, Booking, AppSettings } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
 import { Search, Mail, Phone, IdCard, Clock, Loader2, Edit2, Download, Trash2, ChevronDown, CheckCircle2, XCircle, MessageSquare, Save, Image as ImageIcon } from 'lucide-react';
+import SecurityConfirmModal from '../components/SecurityConfirmModal';
 
 // Admin Note Input Component for better state management
 const AdminNoteInput = ({ 
@@ -75,6 +76,51 @@ export default function AdminStudents() {
   const [updatingBooking, setUpdatingBooking] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'active' | 'pending' | 'frozen'>('active');
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const [deleteConfirmStudent, setDeleteConfirmStudent] = useState<string | null>(null);
+
+  // Group notes states
+  const [activeNote, setActiveNote] = useState('');
+  const [frozenNote, setFrozenNote] = useState('');
+  const [pendingNote, setPendingNote] = useState('');
+  const [isSavingActive, setIsSavingActive] = useState(false);
+  const [isSavingFrozen, setIsSavingFrozen] = useState(false);
+  const [isSavingPending, setIsSavingPending] = useState(false);
+
+  // Security code confirmation states
+  const [securityModalOpen, setSecurityModalOpen] = useState(false);
+  const [securityAction, setSecurityAction] = useState<{
+    onConfirm: () => void;
+    title: string;
+    description: string;
+  } | null>(null);
+
+  const requestSecurityConfirm = (onConfirm: () => void, title: string, description: string) => {
+    setSecurityAction({ onConfirm, title, description });
+    setSecurityModalOpen(true);
+  };
+
+  useEffect(() => {
+    if (!profile?.uid) return;
+
+    // Listen to group_notes in real-time
+    const unsubscribeGroupNotes = onSnapshot(collection(db, 'group_notes'), (snapshot) => {
+      snapshot.docs.forEach((doc) => {
+        const id = doc.id;
+        const data = doc.data();
+        if (id === 'active') {
+          setActiveNote(data.content || '');
+        } else if (id === 'frozen') {
+          setFrozenNote(data.content || '');
+        } else if (id === 'pending') {
+          setPendingNote(data.content || '');
+        }
+      });
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'group_notes');
+    });
+
+    return () => unsubscribeGroupNotes();
+  }, [profile?.uid]);
 
   useEffect(() => {
     if (!profile?.uid) return;
@@ -290,6 +336,30 @@ export default function AdminStudents() {
     }
   };
 
+  const handleSaveGroupNote = async (status: 'active' | 'frozen' | 'pending', content: string) => {
+    if (!profile) return;
+    
+    if (status === 'active') setIsSavingActive(true);
+    if (status === 'frozen') setIsSavingFrozen(true);
+    if (status === 'pending') setIsSavingPending(true);
+
+    try {
+      await setDoc(doc(db, 'group_notes', status), {
+        content: content.trim(),
+        admin_name: profile.name,
+        admin_id: profile.uid,
+        timestamp: serverTimestamp()
+      });
+      alert('تم حفظ الملاحظة الجماعية بنجاح');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `group_notes/${status}`);
+    } finally {
+      if (status === 'active') setIsSavingActive(false);
+      if (status === 'frozen') setIsSavingFrozen(false);
+      if (status === 'pending') setIsSavingPending(false);
+    }
+  };
+
   const studentIds = new Set(students.map(s => s.uid));
   const studentBookings = bookings.filter(b => studentIds.has(b.student_id));
 
@@ -370,15 +440,102 @@ export default function AdminStudents() {
         </button>
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-        <input
-          type="text"
-          placeholder="بحث بالاسم أو الرقم الجامعي..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pr-12 pl-4 py-3 bg-white border border-slate-200 rounded-2xl shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-        />
+      <div className="flex flex-col md:flex-row gap-6 items-start">
+        <div className="relative w-full md:max-w-md">
+          <label className="block text-xs font-bold text-slate-500 mb-1 mr-2">البحث عن الطلاب</label>
+          <div className="relative">
+            <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+            <input
+              type="text"
+              placeholder="بحث بالاسم أو الرقم الجامعي..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pr-12 pl-4 py-3 bg-white border border-slate-200 rounded-2xl shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Group Notes System */}
+      <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
+        <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+          <MessageSquare className="text-indigo-600" size={20} />
+          <h2 className="text-sm font-bold text-slate-900">نظام الملاحظات الجماعية المخصصة (سريعة التحديث)</h2>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Active Note */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg">ملاحظة الطلاب النشطين</label>
+            </div>
+            <div className="relative flex gap-2">
+              <input
+                type="text"
+                placeholder="اكتب ملاحظة للطلاب النشطين..."
+                value={activeNote}
+                onChange={(e) => setActiveNote(e.target.value)}
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+              />
+              <button
+                onClick={() => handleSaveGroupNote('active', activeNote)}
+                disabled={isSavingActive}
+                className="bg-indigo-600 text-white p-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50 shrink-0 flex items-center justify-center"
+                title="حفظ"
+              >
+                {isSavingActive ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              </button>
+            </div>
+          </div>
+
+          {/* Frozen Note */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-[11px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg">ملاحظة الطلاب المجمدين</label>
+            </div>
+            <div className="relative flex gap-2">
+              <input
+                type="text"
+                placeholder="اكتب ملاحظة للطلاب المجمدين..."
+                value={frozenNote}
+                onChange={(e) => setFrozenNote(e.target.value)}
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+              />
+              <button
+                onClick={() => handleSaveGroupNote('frozen', frozenNote)}
+                disabled={isSavingFrozen}
+                className="bg-indigo-600 text-white p-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50 shrink-0 flex items-center justify-center"
+                title="حفظ"
+              >
+                {isSavingFrozen ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              </button>
+            </div>
+          </div>
+
+          {/* Pending Note */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="block text-[11px] font-bold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-lg">ملاحظة الطلاب المعلقين</label>
+            </div>
+            <div className="relative flex gap-2">
+              <input
+                type="text"
+                placeholder="اكتب ملاحظة للطلاب المعلقين..."
+                value={pendingNote}
+                onChange={(e) => setPendingNote(e.target.value)}
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+              />
+              <button
+                onClick={() => handleSaveGroupNote('pending', pendingNote)}
+                disabled={isSavingPending}
+                className="bg-indigo-600 text-white p-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50 shrink-0 flex items-center justify-center"
+                title="حفظ"
+              >
+                {isSavingPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
@@ -473,7 +630,11 @@ export default function AdminStudents() {
                       <div className="flex items-center gap-2">
                         {(student.status === 'pending' || !student.status || student.status === 'frozen') && (
                           <button 
-                            onClick={() => handleActivateStudent(student)}
+                            onClick={() => requestSecurityConfirm(
+                              () => handleActivateStudent(student),
+                              'تفعيل حساب الطالب',
+                              `يرجى إدخال كلمة المرور الموحدة لتأكيد تفعيل حساب الطالب: ${student.name}`
+                            )}
                             disabled={updatingStatus === student.uid}
                             className="flex items-center gap-1 bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors disabled:opacity-50"
                           >
@@ -483,7 +644,11 @@ export default function AdminStudents() {
                         )}
                         {student.status === 'active' && (
                           <button 
-                            onClick={() => handleFreezeStudent(student.uid)}
+                            onClick={() => requestSecurityConfirm(
+                              () => handleFreezeStudent(student.uid),
+                              'تجميد حساب الطالب',
+                              `يرجى إدخال كلمة المرور الموحدة لتأكيد تجميد حساب الطالب: ${student.name}`
+                            )}
                             disabled={updatingStatus === student.uid}
                             className="flex items-center gap-1 bg-amber-50 text-amber-600 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-amber-100 transition-colors disabled:opacity-50"
                           >
@@ -492,7 +657,7 @@ export default function AdminStudents() {
                           </button>
                         )}
                         <button 
-                          onClick={() => handleDeleteStudent(student.uid)}
+                          onClick={() => setDeleteConfirmStudent(student.uid)}
                           className="p-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors"
                           title="حذف الطالب نهائياً"
                         >
@@ -586,6 +751,41 @@ export default function AdminStudents() {
         </table>
       </div>
 
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmStudent && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-8 text-center">
+            <div className="w-20 h-20 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Trash2 size={40} />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">هل أنت متأكد؟</h2>
+            <p className="text-slate-500 mb-8">سيتم حذف الطالب وجميع حجوزاته نهائياً من النظام. لا يمكن التراجع عن هذا الإجراء.</p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => {
+                  const uidToDelete = deleteConfirmStudent;
+                  setDeleteConfirmStudent(null);
+                  requestSecurityConfirm(
+                    () => handleDeleteStudent(uidToDelete),
+                    'تأكيد حذف الطالب نهائياً',
+                    'يرجى إدخال كلمة المرور الموحدة لتأكيد عملية حذف الطالب وحجوزاته من النظام نهائياً.'
+                  );
+                }} 
+                className="flex-1 bg-red-600 text-white py-3 rounded-xl font-bold hover:bg-red-700 transition-colors"
+              >
+                نعم، متأكد
+              </button>
+              <button 
+                onClick={() => setDeleteConfirmStudent(null)} 
+                className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Edit Hours Modal */}
       {editingHours && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -608,6 +808,20 @@ export default function AdminStudents() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Security Code Confirm Modal */}
+      {securityModalOpen && securityAction && (
+        <SecurityConfirmModal
+          isOpen={securityModalOpen}
+          onClose={() => {
+            setSecurityModalOpen(false);
+            setSecurityAction(null);
+          }}
+          onConfirm={securityAction.onConfirm}
+          title={securityAction.title}
+          description={securityAction.description}
+        />
       )}
     </div>
   );

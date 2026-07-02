@@ -20,6 +20,8 @@ export default function AdminSettings() {
     exam_end: '',
     default_required_hours: 16,
     app_logo_url: '',
+    reset_password: '',
+    security_code: '',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -40,6 +42,8 @@ export default function AdminSettings() {
           exam_end: data.exam_end ?? '',
           default_required_hours: data.default_required_hours ?? 16,
           app_logo_url: data.app_logo_url ?? '',
+          reset_password: data.reset_password ?? '',
+          security_code: data.security_code ?? '',
         });
       }
       setLoading(false);
@@ -244,6 +248,26 @@ export default function AdminSettings() {
                 />
               </div>
             </div>
+          </div>
+
+          <div className="md:col-span-2 border-t border-slate-100 pt-6">
+            <label className="block text-sm font-bold text-slate-700 mb-2">كلمة المرور الموحدة للعمليات الحساسة وتصفير البرنامج</label>
+            <div className="relative">
+              <Shield size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type={isSuperAdmin ? "text" : "password"}
+                disabled={!isSuperAdmin}
+                placeholder={isSuperAdmin ? "أدخل كلمة المرور الموحدة (لتصفير البرنامج والعمليات الحساسة)..." : "••••••••"}
+                value={isSuperAdmin ? settings.reset_password : "••••••••"}
+                onChange={(e) => setSettings({ ...settings, reset_password: e.target.value })}
+                className="w-full pr-12 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium text-slate-900"
+              />
+            </div>
+            <p className="text-xs text-slate-400 mt-2">
+              {isSuperAdmin 
+                ? "هذه كلمة المرور الموحدة التي يضعها السوبر أدمن، وتستخدم لتأكيد كافة العمليات الحساسة (مثل تصفير البرنامج، حذف الطلاب، حذف المواد، تفعيل/تجميد الحسابات)."
+                : "كلمة المرور الموحدة تظهر ويتم تعديلها فقط بواسطة السوبر أدمن."}
+            </p>
           </div>
 
           <div className="md:col-span-2 border-t border-slate-100 pt-6">

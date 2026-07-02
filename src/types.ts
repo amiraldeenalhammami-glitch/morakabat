@@ -51,4 +51,14 @@ export interface AppSettings {
   exam_end: string;
   default_required_hours: number;
   app_logo_url?: string;
+  reset_password?: string;
+  security_code?: string;
+}
+
+export interface GroupNote {
+  id: string;
+  content: string;
+  admin_name: string;
+  admin_id: string;
+  timestamp: any;
 }

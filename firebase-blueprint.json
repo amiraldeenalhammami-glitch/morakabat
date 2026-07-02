@@ -13,7 +13,10 @@
         "role": { "type": "string", "enum": ["student", "admin"], "description": "User role" },
         "photo": { "type": "string", "description": "URL to personal photo" },
         "student_card_image": { "type": "string", "description": "URL to student card image" },
-        "required_hours": { "type": "number", "description": "Required invigilation hours" }
+        "required_hours": { "type": "number", "description": "Required invigilation hours" },
+        "admin_note": { "type": "string", "description": "Note from admin about student" },
+        "student_note": { "type": "string", "description": "Note from student" },
+        "status": { "type": "string", "enum": ["pending", "active", "frozen"], "description": "Account status" }
       },
       "required": ["name", "email", "role"]
     },
@@ -57,14 +60,29 @@
         "registration_start": { "type": "string", "format": "date", "description": "Start of registration period" },
         "registration_end": { "type": "string", "format": "date", "description": "End of registration period" },
         "default_required_hours": { "type": "number", "description": "Default required hours for students" },
-        "app_logo_url": { "type": "string", "description": "URL to application logo" }
+        "app_logo_url": { "type": "string", "description": "URL to application logo" },
+        "reset_password": { "type": "string", "description": "Password for resetting program" },
+        "security_code": { "type": "string", "description": "Unified password for sensitive admin actions" }
       }
+    },
+    "group_notes": {
+      "title": "Group Note",
+      "description": "Broadcast message from admin to students",
+      "type": "object",
+      "properties": {
+        "content": { "type": "string", "description": "Message content" },
+        "admin_name": { "type": "string", "description": "Name of the admin who sent the note" },
+        "admin_id": { "type": "string", "description": "UID of the admin" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Time the note was sent" }
+      },
+      "required": ["content", "admin_name", "admin_id", "timestamp"]
     }
   },
   "firestore": {
     "/users/{userId}": { "schema": "users", "description": "User profiles" },
     "/exam_slots/{slotId}": { "schema": "exam_slots", "description": "Exam slots" },
     "/bookings/{bookingId}": { "schema": "bookings", "description": "Slot bookings" },
-    "/settings/global": { "schema": "settings", "description": "Global settings" }
+    "/settings/global": { "schema": "settings", "description": "Global settings" },
+    "/group_notes/{noteId}": { "schema": "group_notes", "description": "Group broadcast notes" }
   }
 }

@@ -34,7 +34,8 @@ service cloud.firestore {
       return isAuthenticated() &&
         (request.auth.token.email == "amiraldeenalhammami@ab3adacademy.com" || 
          request.auth.uid == "44tKjSuzLiM8bjP5Ot4a51sQuH33" ||
-         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
     }
 
     function isSuperAdmin() {
@@ -44,9 +45,7 @@ service cloud.firestore {
     }
 
     function isValidUser(data) {
-      let allowedFields = ['name', 'email', 'phone', 'university_id', 'department', 'role', 'requested_role', 'photo', 'student_card_image', 'required_hours', 'createdAt', 'status', 'admin_note', 'student_note', 'profile_image_url', 'id_card_image_url'];
-      return data.keys().hasOnly(allowedFields) &&
-             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
              data.role in ['student', 'admin'];
     }
@@ -66,10 +65,17 @@ service cloud.firestore {
     }
 
     function isValidSettings(data) {
-      let allowedFields = ['registration_open', 'registration_start', 'registration_end', 'exam_start', 'exam_end', 'default_required_hours', 'app_logo_url'];
-      return data.keys().hasOnly(allowedFields) &&
-             data.registration_open is bool &&
+      return data.registration_open is bool &&
              (data.default_required_hours is number || !('default_required_hours' in data));
+    }
+
+    function isValidGroupNote(data) {
+      let requiredFields = ['content', 'admin_name', 'admin_id', 'timestamp'];
+      return data.keys().hasAll(requiredFields) &&
+             data.content is string && data.content.size() >= 0 && data.content.size() < 2000 &&
+             data.admin_name is string &&
+             data.admin_id == request.auth.uid &&
+             data.timestamp is timestamp;
     }
 
     function isRegistrationOpen() {
@@ -103,8 +109,19 @@ service cloud.firestore {
 
     match /settings/{settingId} {
       allow read: if true;
-      allow create, update: if isAdmin() && isValidSettings(request.resource.data);
-      allow delete: if isAdmin();
+      allow create: if isSuperAdmin() && isValidSettings(request.resource.data);
+      allow update: if isAdmin() && isValidSettings(request.resource.data) &&
+                    (!('reset_password' in request.resource.data) || 
+                     !('reset_password' in resource.data) ||
+                     request.resource.data.reset_password == resource.data.reset_password ||
+                     isSuperAdmin());
+      allow delete: if isSuperAdmin();
+    }
+
+    match /group_notes/{noteId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidGroupNote(request.resource.data);
+      allow update, delete: if isAdmin();
     }
 
     match /otps/{email} {

@@ -91,13 +91,15 @@ export default function Register() {
       setSuccess('تم إنشاء الحساب بنجاح! تم إرسال رابط التحقق إلى بريدك الإلكتروني. يرجى تفعيل الحساب قبل تسجيل الدخول.');
       setTimeout(() => navigate('/login'), 6000);
     } catch (err: any) {
-      console.error(err);
+      console.error('Registration error details:', err);
       const errorCode = err.code || '';
+      const errorMessage = err.message || '';
+      const fullError = (typeof err === 'string' ? err : (errorMessage + ' ' + errorCode)).toLowerCase();
       
-      if (errorCode === 'auth/email-already-in-use' || err.message?.includes('auth/email-already-in-use')) {
+      if (fullError.includes('email-already-in-use')) {
         setError('هذا البريد الإلكتروني مسجل لدينا بالفعل.');
         setIsEmailInUse(true);
-      } else if (errorCode === 'auth/internal-error' || err.message?.includes('auth/internal-error')) {
+      } else if (fullError.includes('internal-error')) {
         setError('حدث خطأ داخلي في الخادم. يرجى التأكد من اتصالك بالإنترنت والمحاولة مرة أخرى.');
       } else {
         setError('حدث خطأ أثناء إنشاء الحساب. يرجى المحاولة مرة أخرى.');
