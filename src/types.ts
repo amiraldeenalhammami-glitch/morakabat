@@ -1,4 +1,5 @@
 export type UserRole = 'student' | 'admin';
+export type ObserverType = 'طالب دراسات' | 'موظف' | 'أمين قاعة' | 'دكتور مشرف';
 
 export interface UserProfile {
   uid: string;
@@ -16,6 +17,7 @@ export interface UserProfile {
   student_note?: string;
   profile_image_url?: string;
   id_card_image_url?: string;
+  observer_type?: ObserverType;
 }
 
 export interface ExamSlot {
@@ -29,6 +31,25 @@ export interface ExamSlot {
   current_invigilators?: number; // Track current bookings
   location?: string;
   academic_year: 1 | 2 | 3 | 4 | 5;
+  duration_hours?: number; // Duration of exam in hours (e.g. 1, 2, 3, 4, 5)
+
+  // New rooms config fields
+  observers_per_room?: number;
+  has_studios?: boolean;
+  studios_from?: number;
+  studios_to?: number;
+  has_lobbies?: boolean;
+  lobbies_from?: number;
+  lobbies_to?: number;
+  has_basements?: boolean;
+  basements_from?: number;
+  basements_to?: number;
+  has_halls?: boolean;
+  halls_from?: number;
+  halls_to?: number;
+  has_expansions?: boolean;
+  expansions_from?: number;
+  expansions_to?: number;
 }
 
 export interface Booking {
@@ -40,7 +61,10 @@ export interface Booking {
   course_name: string;
   exam_date: string;
   attended?: boolean;
+  attendance_status?: 'present' | 'absent' | 'pending';
   admin_notes?: string;
+  createdAt?: string;
+  observer_type?: ObserverType;
 }
 
 export interface AppSettings {

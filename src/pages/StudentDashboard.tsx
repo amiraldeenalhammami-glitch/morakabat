@@ -12,7 +12,7 @@ export default function StudentDashboard() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [globalSettings, setGlobalSettings] = useState<AppSettings | null>(null);
-  const [groupNotes, setGroupNotes] = useState<GroupNote[]>([]);
+  const [currentNote, setCurrentNote] = useState<GroupNote | null>(null);
   const { canInstall, installApp } = usePWA();
 
   useEffect(() => {
@@ -57,23 +57,35 @@ export default function StudentDashboard() {
   useEffect(() => {
     if (!profile?.uid) return;
 
-    const q = query(
-      collection(db, 'group_notes'),
-      orderBy('timestamp', 'desc'),
-      limit(5)
-    );
+    const status = profile.status || 'pending';
+    const docRef = doc(db, 'group_notes', status);
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setGroupNotes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroupNote)));
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data && data.content && data.content.trim() !== '') {
+          setCurrentNote({
+            id: docSnap.id,
+            content: data.content,
+            admin_name: data.admin_name || 'الإدارة',
+            admin_id: data.admin_id || '',
+            timestamp: data.timestamp
+          });
+        } else {
+          setCurrentNote(null);
+        }
+      } else {
+        setCurrentNote(null);
+      }
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'group_notes');
+      handleFirestoreError(error, OperationType.GET, `group_notes/${status}`);
     });
 
     return () => unsubscribe();
-  }, [profile?.uid]);
+  }, [profile?.uid, profile?.status]);
 
-  const totalBookedHours = bookings.reduce((acc, curr) => acc + curr.booked_hours, 0);
-  const requiredHours = profile?.required_hours || globalSettings?.default_required_hours || 16;
+  const totalBookedHours = bookings.reduce((acc, curr) => acc + Math.abs(Number(curr.booked_hours || 0)), 0);
+  const requiredHours = Number(profile?.required_hours || globalSettings?.default_required_hours || 16);
   const remainingHours = Math.max(0, requiredHours - totalBookedHours);
   const progress = Math.min(100, (totalBookedHours / requiredHours) * 100);
 
@@ -128,6 +140,11 @@ export default function StudentDashboard() {
         <div className="flex-1">
           <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-3xl font-bold text-slate-900">مرحباً، {profile?.name}</h1>
+            {profile?.observer_type && (
+              <span className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold border border-indigo-200">
+                {profile.observer_type}
+              </span>
+            )}
             {profile?.status === 'active' ? (
               <span className="flex items-center gap-1 bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-xs font-bold ring-1 ring-emerald-200">
                 <CheckCircle2 size={14} /> مفعل ✅
@@ -183,32 +200,30 @@ export default function StudentDashboard() {
         </div>
       )}
 
-      {groupNotes.length > 0 && (
+      {currentNote && (
         <div className="space-y-4">
           <div className="flex items-center gap-2 px-2">
             <Bell size={20} className="text-indigo-600" />
             <h2 className="text-xl font-bold text-slate-900">ملاحظات جماعية من الإدارة</h2>
           </div>
           <div className="grid grid-cols-1 gap-4">
-            {groupNotes.map((note) => (
-              <div key={note.id} className="bg-white border border-slate-100 p-6 rounded-3xl flex items-start gap-4 shadow-sm relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-1 h-full bg-indigo-600"></div>
-                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
-                  <MessageSquare size={24} />
-                </div>
-                <div className="flex-1">
-                  <div className="flex justify-between items-start mb-2">
-                    <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider">ملاحظة جماعية من: {note.admin_name}</p>
-                    {note.timestamp && (
-                      <span className="text-[10px] text-slate-400">
-                        {new Date(note.timestamp?.toDate()).toLocaleString('ar-EG')}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-slate-700 font-medium leading-relaxed whitespace-pre-wrap">{note.content}</p>
-                </div>
+            <div className="bg-white border border-slate-100 p-6 rounded-3xl flex items-start gap-4 shadow-sm relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-1 h-full bg-indigo-600"></div>
+              <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+                <MessageSquare size={24} />
               </div>
-            ))}
+              <div className="flex-1">
+                <div className="flex justify-between items-start mb-2">
+                  <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider">ملاحظة جماعية من: {currentNote.admin_name}</p>
+                  {currentNote.timestamp && (
+                    <span className="text-[10px] text-slate-400">
+                      {new Date(currentNote.timestamp?.toDate()).toLocaleString('ar-EG')}
+                    </span>
+                  )}
+                </div>
+                <p className="text-slate-700 font-medium leading-relaxed whitespace-pre-wrap">{currentNote.content}</p>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -321,9 +336,22 @@ export default function StudentDashboard() {
                         <td className="px-6 py-4 text-slate-600">{booking.exam_date}</td>
                         <td className="px-6 py-4 text-slate-600">{booking.booked_hours} ساعة</td>
                         <td className="px-6 py-4">
-                          <span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-bold">
-                            مؤكد
-                          </span>
+                          {booking.attendance_status === 'present' ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-bold ring-1 ring-emerald-200">
+                              <CheckCircle2 size={14} />
+                              <span>حاضر (ملتزم)</span>
+                            </span>
+                          ) : booking.attendance_status === 'absent' ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-50 text-rose-600 rounded-full text-xs font-bold ring-1 ring-rose-200">
+                              <XCircle size={14} />
+                              <span>غائب</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-xs font-bold ring-1 ring-slate-200">
+                              <Clock size={14} />
+                              <span>انتظار</span>
+                            </span>
+                          )}
                         </td>
                       </tr>
                     ))

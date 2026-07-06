@@ -4,7 +4,7 @@ import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { UserProfile, Booking, AppSettings } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
-import { Search, Mail, Phone, IdCard, Clock, Loader2, Edit2, Download, Trash2, ChevronDown, CheckCircle2, XCircle, MessageSquare, Save, Image as ImageIcon } from 'lucide-react';
+import { Search, Mail, Phone, IdCard, Clock, Loader2, Edit2, Download, Trash2, ChevronDown, CheckCircle2, XCircle, MessageSquare, Save, Image as ImageIcon, Check, X } from 'lucide-react';
 import SecurityConfirmModal from '../components/SecurityConfirmModal';
 
 // Admin Note Input Component for better state management
@@ -40,7 +40,7 @@ const AdminNoteInput = ({
       <MessageSquare size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
       <input 
         type="text"
-        placeholder="ملاحظة للطالب..."
+        placeholder="ملاحظة للمراقب..."
         value={value}
         onChange={(e) => {
           setValue(e.target.value);
@@ -204,22 +204,53 @@ export default function AdminStudents() {
   };
 
   const handleDownloadAttendanceReport = () => {
-    const headers = ['اسم الطالب', 'الرقم الجامعي', 'المادة', 'التاريخ', 'عدد الساعات', 'الالتزام', 'الملاحظات'];
+    const headers = [
+      'اسم المراقب',
+      'الوضع',
+      'القسم',
+      'البريد الإلكتروني',
+      'رقم الهاتف',
+      'الساعات المطلوبة منه',
+      'الساعات التي حجزها ضمن البرنامج',
+      'الساعات التي سجل حضور فيها بالفعل',
+      'نسبة الإنجاز'
+    ];
     const rows: any[] = [];
 
     students.forEach(s => {
+      // 1. الوضع (Account status/type)
+      let statusType = s.observer_type || '';
+      if (statusType.includes('دراسات')) statusType = 'دراسات';
+      else if (statusType.includes('موظف')) statusType = 'موظف';
+      else if (statusType.includes('أمين قاعة')) statusType = 'أمين قاعة';
+
+      // 2. Bookings for this student
       const studentBookings = bookings.filter(b => b.student_id === s.uid);
-      studentBookings.forEach(b => {
-        rows.push([
-          s.name,
-          s.university_id || '',
-          b.course_name,
-          b.exam_date,
-          b.booked_hours,
-          b.attended ? 'ملتزم' : 'غير ملتزم',
-          b.admin_notes || ''
-        ]);
-      });
+      
+      // 3. الساعات التي حجزها
+      const bookedHours = studentBookings.reduce((sum, b) => sum + Math.abs(Number(b.booked_hours || 0)), 0);
+
+      // 4. الساعات التي حضرها بالفعل (حالة الحضور 'present')
+      const attendedBookings = studentBookings.filter(b => b.attendance_status === 'present');
+      const attendedHours = attendedBookings.reduce((sum, b) => sum + Math.abs(Number(b.booked_hours || 0)), 0);
+
+      // 5. الساعات المطلوبة منه
+      const requiredHours = Number(s.required_hours || globalSettings?.default_required_hours || 16);
+
+      // 6. نسبة الإنجاز
+      const achievementRate = requiredHours > 0 ? `${Math.round((attendedHours / requiredHours) * 100)}%` : '0%';
+
+      rows.push([
+        s.name,
+        statusType,
+        s.department || '',
+        s.email,
+        s.phone || '',
+        requiredHours,
+        bookedHours,
+        attendedHours,
+        achievementRate
+      ]);
     });
 
     const csvContent = [
@@ -231,7 +262,7 @@ export default function AdminStudents() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', 'attendance_report.csv');
+    link.setAttribute('download', 'observers_attendance_report.csv');
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -251,11 +282,12 @@ export default function AdminStudents() {
     }
   };
 
-  const handleToggleAttendance = async (bookingId: string, currentStatus: boolean) => {
+  const handleSetAttendanceStatus = async (bookingId: string, status: 'present' | 'absent' | 'pending') => {
     setUpdatingBooking(bookingId);
     try {
       await updateDoc(doc(db, 'bookings', bookingId), {
-        attended: !currentStatus
+        attendance_status: status,
+        attended: status === 'present'
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `bookings/${bookingId}`);
@@ -336,6 +368,22 @@ export default function AdminStudents() {
     }
   };
 
+  const handleUpdateObserverType = async (uid: string, type: string) => {
+    try {
+      await updateDoc(doc(db, 'users', uid), {
+        observer_type: type
+      });
+      const userBookings = bookings.filter(b => b.student_id === uid);
+      for (const b of userBookings) {
+        await updateDoc(doc(db, 'bookings', b.id), {
+          observer_type: type
+        });
+      }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${uid}`);
+    }
+  };
+
   const handleSaveGroupNote = async (status: 'active' | 'frozen' | 'pending', content: string) => {
     if (!profile) return;
     
@@ -385,8 +433,8 @@ export default function AdminStudents() {
     <div className="space-y-8">
       <header className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">قائمة الطلاب</h1>
-          <p className="text-slate-500 mt-1">عرض بيانات الطلاب ومتابعة ساعات المراقبة</p>
+          <h1 className="text-3xl font-bold text-slate-900">قائمة المراقبين</h1>
+          <p className="text-slate-500 mt-1">عرض بيانات المراقبين ومتابعة ساعات المراقبة</p>
         </div>
         <div className="flex gap-3">
           <button
@@ -411,7 +459,7 @@ export default function AdminStudents() {
           onClick={() => setActiveTab('active')}
           className={`pb-4 px-2 font-bold transition-all relative ${activeTab === 'active' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
         >
-          الطلاب النشطون
+          المراقبون النشطون
           {activeTab === 'active' && <div className="absolute bottom-0 left-0 right-0 h-1 bg-indigo-600 rounded-t-full" />}
         </button>
         <button
@@ -430,7 +478,7 @@ export default function AdminStudents() {
           onClick={() => setActiveTab('frozen')}
           className={`pb-4 px-2 font-bold transition-all relative ${activeTab === 'frozen' ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
         >
-          الطلاب المجمدون
+          المراقبون المجمدون
           {students.filter(s => s.status === 'frozen').length > 0 && (
             <span className="mr-2 bg-amber-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
               {students.filter(s => s.status === 'frozen').length}
@@ -442,7 +490,7 @@ export default function AdminStudents() {
 
       <div className="flex flex-col md:flex-row gap-6 items-start">
         <div className="relative w-full md:max-w-md">
-          <label className="block text-xs font-bold text-slate-500 mb-1 mr-2">البحث عن الطلاب</label>
+          <label className="block text-xs font-bold text-slate-500 mb-1 mr-2">البحث عن المراقبين</label>
           <div className="relative">
             <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
             <input
@@ -467,12 +515,12 @@ export default function AdminStudents() {
           {/* Active Note */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="block text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg">ملاحظة الطلاب النشطين</label>
+              <label className="block text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg">ملاحظة المراقبين النشطين</label>
             </div>
             <div className="relative flex gap-2">
               <input
                 type="text"
-                placeholder="اكتب ملاحظة للطلاب النشطين..."
+                placeholder="اكتب ملاحظة للمراقبين النشطين..."
                 value={activeNote}
                 onChange={(e) => setActiveNote(e.target.value)}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
@@ -491,12 +539,12 @@ export default function AdminStudents() {
           {/* Frozen Note */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="block text-[11px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg">ملاحظة الطلاب المجمدين</label>
+              <label className="block text-[11px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg">ملاحظة المراقبين المجمدين</label>
             </div>
             <div className="relative flex gap-2">
               <input
                 type="text"
-                placeholder="اكتب ملاحظة للطلاب المجمدين..."
+                placeholder="اكتب ملاحظة للمراقبين المجمدين..."
                 value={frozenNote}
                 onChange={(e) => setFrozenNote(e.target.value)}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
@@ -515,12 +563,12 @@ export default function AdminStudents() {
           {/* Pending Note */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="block text-[11px] font-bold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-lg">ملاحظة الطلاب المعلقين</label>
+              <label className="block text-[11px] font-bold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-lg">ملاحظة المراقبين المعلقين</label>
             </div>
             <div className="relative flex gap-2">
               <input
                 type="text"
-                placeholder="اكتب ملاحظة للطلاب المعلقين..."
+                placeholder="اكتب ملاحظة للمراقبين المعلقين..."
                 value={pendingNote}
                 onChange={(e) => setPendingNote(e.target.value)}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
@@ -542,8 +590,8 @@ export default function AdminStudents() {
         <table className="w-full text-right">
           <thead>
             <tr className="bg-slate-50 text-slate-500 text-sm">
-              <th className="px-6 py-4 font-medium">الطالب</th>
-              <th className="px-6 py-4 font-medium text-center">ملاحظة الطالب</th>
+              <th className="px-6 py-4 font-medium">المراقب</th>
+              <th className="px-6 py-4 font-medium text-center">ملاحظة المراقب</th>
               <th className="px-6 py-4 font-medium">البيانات الجامعية</th>
               <th className="px-6 py-4 font-medium">الساعات (منجز / مطلوب)</th>
               <th className="px-6 py-4 font-medium">ملاحظة الأدمن</th>
@@ -582,7 +630,7 @@ export default function AdminStudents() {
                               <span className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">طلب مدير</span>
                             )}
                             {student.status === 'pending' && student.requested_role === 'student' && (
-                              <span className="bg-emerald-100 text-emerald-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">طلب طالب</span>
+                              <span className="bg-emerald-100 text-emerald-700 text-[10px] px-1.5 py-0.5 rounded-full font-bold">طلب مراقب</span>
                             )}
                           </span>
                           <span className="text-[10px] text-slate-400">{student.email}</span>
@@ -599,9 +647,27 @@ export default function AdminStudents() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex flex-col text-sm text-slate-600">
-                        <span className="flex items-center gap-1"><IdCard size={14} /> {student.university_id}</span>
-                        <span className="text-xs text-slate-400">{student.department}</span>
+                      <div className="flex flex-col gap-2 text-right">
+                        <div className="flex flex-col text-sm text-slate-600">
+                          <span className="flex items-center gap-1 justify-end"><IdCard size={14} /> {student.university_id}</span>
+                          <span className="text-xs text-slate-400">{student.department}</span>
+                        </div>
+                        <div className="relative w-36 self-end">
+                          <select
+                            value={student.observer_type || 'طالب دراسات'}
+                            onChange={async (e) => {
+                              const newType = e.target.value as any;
+                              await handleUpdateObserverType(student.uid, newType);
+                            }}
+                            className="w-full pr-2 pl-6 py-1 bg-indigo-50/50 border border-indigo-100 rounded-lg text-xs font-bold text-indigo-700 outline-none transition-all appearance-none text-right"
+                          >
+                            <option value="طالب دراسات">طالب دراسات</option>
+                            <option value="موظف">موظف</option>
+                            <option value="أمين قاعة">أمين قاعة</option>
+                            <option value="دكتور مشرف">دكتور مشرف</option>
+                          </select>
+                          <ChevronDown size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-indigo-600 pointer-events-none" />
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -632,8 +698,8 @@ export default function AdminStudents() {
                           <button 
                             onClick={() => requestSecurityConfirm(
                               () => handleActivateStudent(student),
-                              'تفعيل حساب الطالب',
-                              `يرجى إدخال كلمة المرور الموحدة لتأكيد تفعيل حساب الطالب: ${student.name}`
+                              'تفعيل حساب المراقب',
+                              `يرجى إدخال كلمة المرور الموحدة لتأكيد تفعيل حساب المراقب: ${student.name}`
                             )}
                             disabled={updatingStatus === student.uid}
                             className="flex items-center gap-1 bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors disabled:opacity-50"
@@ -646,20 +712,20 @@ export default function AdminStudents() {
                           <button 
                             onClick={() => requestSecurityConfirm(
                               () => handleFreezeStudent(student.uid),
-                              'تجميد حساب الطالب',
-                              `يرجى إدخال كلمة المرور الموحدة لتأكيد تجميد حساب الطالب: ${student.name}`
+                              'تجميد حساب المراقب',
+                              `يرجى إدخال كلمة المرور الموحدة لتأكيد تجميد حساب المراقب: ${student.name}`
                             )}
                             disabled={updatingStatus === student.uid}
                             className="flex items-center gap-1 bg-amber-50 text-amber-600 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-amber-100 transition-colors disabled:opacity-50"
                           >
                             {updatingStatus === student.uid ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
-                            <span>تجميد الطالب</span>
+                            <span>تجميد المراقب</span>
                           </button>
                         )}
                         <button 
                           onClick={() => setDeleteConfirmStudent(student.uid)}
                           className="p-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors"
-                          title="حذف الطالب نهائياً"
+                          title="حذف المراقب نهائياً"
                         >
                           <Trash2 size={18} />
                         </button>
@@ -685,12 +751,24 @@ export default function AdminStudents() {
                             )}
                           </div>
                           <div className="divide-y divide-slate-50">
-                            {studentBookings.length > 0 ? (
-                              studentBookings.map((booking) => (
+                            {currentStudentBookings.length > 0 ? (
+                              currentStudentBookings.map((booking) => (
                                 <div key={booking.id} className="p-4 flex flex-wrap items-center justify-between gap-4">
                                   <div className="flex items-center gap-4 min-w-[200px]">
-                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${booking.attended ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
-                                      {booking.attended ? <CheckCircle2 size={20} /> : <Clock size={20} />}
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                                      booking.attendance_status === 'present' 
+                                        ? 'bg-emerald-50 text-emerald-600' 
+                                        : booking.attendance_status === 'absent'
+                                        ? 'bg-red-50 text-red-600'
+                                        : 'bg-slate-100 text-slate-400'
+                                    }`}>
+                                      {booking.attendance_status === 'present' ? (
+                                        <CheckCircle2 size={20} />
+                                      ) : booking.attendance_status === 'absent' ? (
+                                        <XCircle size={20} />
+                                      ) : (
+                                        <Clock size={20} />
+                                      )}
                                     </div>
                                     <div>
                                       <p className="font-bold text-slate-900">{booking.course_name}</p>
@@ -701,24 +779,44 @@ export default function AdminStudents() {
                                   <div className="flex items-center gap-6 flex-1">
                                     <div className="flex items-center gap-2">
                                       <span className="text-xs font-medium text-slate-500">حالة الالتزام:</span>
-                                      <button
-                                        onClick={() => handleToggleAttendance(booking.id, !!booking.attended)}
-                                        disabled={updatingBooking === booking.id}
-                                        className={`
-                                          flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold transition-all
-                                          ${booking.attended 
-                                            ? 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200' 
-                                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}
-                                        `}
-                                      >
-                                        {updatingBooking === booking.id ? (
-                                          <Loader2 size={14} className="animate-spin" />
-                                        ) : booking.attended ? (
-                                          <><CheckCircle2 size={14} /> ملتزم</>
-                                        ) : (
-                                          <><XCircle size={14} /> غير محدد</>
-                                        )}
-                                      </button>
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          onClick={() => handleSetAttendanceStatus(booking.id, 'present')}
+                                          disabled={updatingBooking === booking.id}
+                                          title="حاضر"
+                                          className={`p-1 rounded-md border transition-colors ${
+                                            booking.attendance_status === 'present' 
+                                              ? 'bg-emerald-50 border-emerald-300 text-emerald-600' 
+                                              : 'border-slate-200 text-slate-400 hover:bg-slate-50'
+                                          }`}
+                                        >
+                                          <Check size={12} className="font-black" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleSetAttendanceStatus(booking.id, 'absent')}
+                                          disabled={updatingBooking === booking.id}
+                                          title="غائب"
+                                          className={`p-1 rounded-md border transition-colors ${
+                                            booking.attendance_status === 'absent' 
+                                              ? 'bg-red-50 border-red-300 text-red-600' 
+                                              : 'border-slate-200 text-slate-400 hover:bg-slate-50'
+                                          }`}
+                                        >
+                                          <X size={12} className="font-black" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleSetAttendanceStatus(booking.id, 'pending')}
+                                          disabled={updatingBooking === booking.id}
+                                          title="قيد الانتظار"
+                                          className={`px-1.5 py-0.5 rounded-md border text-[9px] font-bold transition-colors ${
+                                            booking.attendance_status === 'pending' || !booking.attendance_status 
+                                              ? 'bg-slate-100 border-slate-300 text-slate-600' 
+                                              : 'border-slate-200 text-slate-400 hover:bg-slate-50'
+                                          }`}
+                                        >
+                                          انتظار
+                                        </button>
+                                      </div>
                                     </div>
                                     
                                     <div className="flex-1 flex items-center gap-2">
@@ -736,7 +834,7 @@ export default function AdminStudents() {
                               ))
                             ) : (
                               <div className="p-8 text-center text-slate-400 text-sm italic">
-                                لا توجد حجوزات مسجلة لهذا الطالب بعد.
+                                لا توجد حجوزات مسجلة لهذا المراقب بعد.
                               </div>
                             )}
                           </div>
@@ -759,7 +857,7 @@ export default function AdminStudents() {
               <Trash2 size={40} />
             </div>
             <h2 className="text-2xl font-bold text-slate-900 mb-2">هل أنت متأكد؟</h2>
-            <p className="text-slate-500 mb-8">سيتم حذف الطالب وجميع حجوزاته نهائياً من النظام. لا يمكن التراجع عن هذا الإجراء.</p>
+            <p className="text-slate-500 mb-8">سيتم حذف المراقب وجميع حجوزاته نهائياً من النظام. لا يمكن التراجع عن هذا الإجراء.</p>
             <div className="flex gap-3">
               <button 
                 onClick={() => {
@@ -767,8 +865,8 @@ export default function AdminStudents() {
                   setDeleteConfirmStudent(null);
                   requestSecurityConfirm(
                     () => handleDeleteStudent(uidToDelete),
-                    'تأكيد حذف الطالب نهائياً',
-                    'يرجى إدخال كلمة المرور الموحدة لتأكيد عملية حذف الطالب وحجوزاته من النظام نهائياً.'
+                    'تأكيد حذف المراقب نهائياً',
+                    'يرجى إدخال كلمة المرور الموحدة لتأكيد عملية حذف المراقب وحجوزاته من النظام نهائياً.'
                   );
                 }} 
                 className="flex-1 bg-red-600 text-white py-3 rounded-xl font-bold hover:bg-red-700 transition-colors"

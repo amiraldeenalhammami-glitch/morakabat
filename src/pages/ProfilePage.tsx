@@ -86,7 +86,7 @@ export default function ProfilePage() {
     { label: 'الرقم الجامعي', value: profile.university_id || 'غير محدد', icon: IdCard, key: 'university_id' },
     { label: 'القسم / التخصص', value: profile.department || 'غير محدد', icon: Building, key: 'department' },
     { label: 'الساعات المطلوبة', value: `${requiredHours} ساعة`, icon: Clock, readonly: true },
-    { label: 'نوع الحساب', value: profile.role === 'admin' ? 'مدير نظام' : 'طالب مراقب', icon: Shield, readonly: true },
+    { label: 'نوع الحساب', value: profile.role === 'admin' ? 'مدير نظام' : 'مراقب', icon: Shield, readonly: true },
   ];
 
   return (
@@ -206,7 +206,7 @@ export default function ProfilePage() {
                   </span>
                 )}
                 <span className={`px-4 py-2 rounded-full text-xs font-bold ${profile.role === 'admin' ? 'bg-rose-50 text-rose-600' : 'bg-indigo-50 text-indigo-600'}`}>
-                  {profile.role === 'admin' ? 'مدير نظام' : 'طالب مراقب'}
+                  {profile.role === 'admin' ? 'مدير نظام' : 'مراقب'}
                 </span>
               </div>
             </div>

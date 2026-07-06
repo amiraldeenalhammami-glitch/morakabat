@@ -5,15 +5,16 @@ import { auth, db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { ExamSlot, Booking, AppSettings } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
-import { Calendar as CalendarIcon, MapPin, Clock, Users, Check, AlertCircle, Loader2, ChevronRight, ChevronLeft } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Clock, Users, Check, AlertCircle, Loader2, ChevronRight, ChevronLeft, Award } from 'lucide-react';
 import { format, parseISO, differenceInHours, eachDayOfInterval, isSameDay, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isWithinInterval } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import { getSlotRooms, getObserverRoom } from '../utils/roomUtils';
 
 export default function BookingPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [slots, setSlots] = useState<ExamSlot[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [allBookings, setAllBookings] = useState<Booking[]>([]);
   const [slotBookings, setSlotBookings] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -21,6 +22,8 @@ export default function BookingPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<'calendar' | 'years'>('calendar');
+
+  const myBookings = allBookings.filter(b => b.student_id === profile?.uid);
 
   useEffect(() => {
     if (profile && profile.status !== 'active') {
@@ -54,7 +57,7 @@ export default function BookingPage() {
 
     const unsubscribeBookings = onSnapshot(collection(db, 'bookings'), (snapshot) => {
       const bookingsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking));
-      setBookings(bookingsData.filter(b => b.student_id === profile?.uid));
+      setAllBookings(bookingsData);
       
       // Calculate total bookings per slot
       const counts: Record<string, number> = {};
@@ -120,12 +123,21 @@ export default function BookingPage() {
       return;
     }
 
-    const totalBookedHours = bookings.reduce((acc, curr) => acc + curr.booked_hours, 0);
-    const requiredHours = profile.required_hours || globalSettings?.default_required_hours || 16;
+    const totalBookedHours = myBookings.reduce((acc, curr) => acc + Math.abs(Number(curr.booked_hours || 0)), 0);
+    const requiredHours = Number(profile.required_hours || globalSettings?.default_required_hours || 16);
     
-    const startTime = parseISO(`2000-01-01T${slot.start_time}`);
-    const endTime = parseISO(`2000-01-01T${slot.end_time}`);
-    const slotHours = differenceInHours(endTime, startTime);
+    let slotHours = 2;
+    if (slot.duration_hours !== undefined) {
+      slotHours = Math.max(1, Math.abs(Number(slot.duration_hours)));
+    } else {
+      try {
+        const startTime = parseISO(`2000-01-01T${slot.start_time}`);
+        const endTime = parseISO(`2000-01-01T${slot.end_time}`);
+        slotHours = Math.max(1, Math.abs(differenceInHours(endTime, startTime))) || 2;
+      } catch (e) {
+        slotHours = 2;
+      }
+    }
 
     if (totalBookedHours + slotHours > requiredHours) {
       alert('لا يمكنك تجاوز عدد الساعات المطلوبة منك.');
@@ -151,6 +163,7 @@ export default function BookingPage() {
         student_name: profile.name,
         course_name: slot.course_name,
         exam_date: slot.exam_date,
+        observer_type: profile.observer_type || 'طالب دراسات',
         createdAt: new Date().toISOString()
       });
     } catch (err) {
@@ -166,7 +179,7 @@ export default function BookingPage() {
       return;
     }
 
-    const booking = bookings.find(b => b.slot_id === slotId);
+    const booking = myBookings.find(b => b.slot_id === slotId);
     const slot = slots.find(s => s.id === slotId);
     if (!booking || !slot) return;
 
@@ -326,7 +339,9 @@ export default function BookingPage() {
                   <SlotCard 
                     key={slot.id}
                     slot={slot}
-                    isBooked={bookings.some(b => b.slot_id === slot.id)}
+                    isBooked={myBookings.some(b => b.slot_id === slot.id)}
+                    allBookings={allBookings}
+                    studentId={profile?.uid || ''}
                     currentInvigilators={slotBookings[slot.id] || 0}
                     actionLoading={actionLoading}
                     isRegistrationActive={isRegistrationActive()}
@@ -367,7 +382,9 @@ export default function BookingPage() {
                       <SlotCard 
                         key={slot.id}
                         slot={slot}
-                        isBooked={bookings.some(b => b.slot_id === slot.id)}
+                        isBooked={myBookings.some(b => b.slot_id === slot.id)}
+                        allBookings={allBookings}
+                        studentId={profile?.uid || ''}
                         currentInvigilators={slotBookings[slot.id] || 0}
                         actionLoading={actionLoading}
                         isRegistrationActive={isRegistrationActive()}
@@ -389,6 +406,8 @@ export default function BookingPage() {
 interface SlotCardProps {
   slot: ExamSlot;
   isBooked: boolean;
+  allBookings: Booking[];
+  studentId: string;
   currentInvigilators: number;
   actionLoading: string | null;
   isRegistrationActive: boolean;
@@ -397,20 +416,36 @@ interface SlotCardProps {
   showDate?: boolean;
 }
 
-function SlotCard({ slot, isBooked, currentInvigilators, actionLoading, isRegistrationActive, onBook, onCancel, showDate }: SlotCardProps) {
+function SlotCard({ slot, isBooked, allBookings, studentId, currentInvigilators, actionLoading, isRegistrationActive, onBook, onCancel, showDate }: SlotCardProps) {
   const isFull = currentInvigilators >= slot.required_invigilators;
   const yearNames = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة'];
+
+  // Calculate student assigned room if booked
+  const slotBookingsList = allBookings.filter(b => b.slot_id === slot.id);
+  const myBooking = slotBookingsList.find(b => b.student_id === studentId);
+
+  let assignedRoom = '';
+  if (isBooked && myBooking) {
+    const sortedBookings = [...slotBookingsList].sort((a, b) => {
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (timeA !== timeB) return timeA - timeB;
+      return a.id.localeCompare(b.id);
+    });
+    const rooms = getSlotRooms(slot);
+    assignedRoom = rooms.length > 0 ? getObserverRoom(slot, myBooking, sortedBookings) : (slot.location || 'القاعة العامة');
+  }
 
   return (
     <div 
       className={`
-        bg-white rounded-3xl shadow-sm border p-6 flex flex-col transition-all
+        bg-white rounded-3xl shadow-sm border p-6 flex flex-col transition-all text-right
         ${isBooked ? 'border-indigo-200 ring-1 ring-indigo-100' : 'border-slate-100'}
         ${isFull && !isBooked ? 'opacity-75 grayscale-[0.5]' : ''}
       `}
     >
-      <div className="flex justify-between items-start mb-4">
-        <div className="flex flex-col gap-1">
+      <div className="flex justify-between items-start mb-4 flex-row-reverse">
+        <div className="flex flex-col gap-1 items-end">
           <span className={`
             px-3 py-1 rounded-full text-[10px] font-bold w-fit
             ${slot.session_type === 'morning' ? 'bg-amber-50 text-amber-600' : 'bg-indigo-50 text-indigo-600'}
@@ -426,7 +461,7 @@ function SlotCard({ slot, isBooked, currentInvigilators, actionLoading, isRegist
           )}
         </div>
         {isBooked && (
-          <span className="flex items-center gap-1 text-emerald-600 text-xs font-bold">
+          <span className="flex items-center gap-1 text-emerald-600 text-xs font-bold flex-row-reverse">
             <Check size={14} />
             تم الحجز
           </span>
@@ -435,17 +470,17 @@ function SlotCard({ slot, isBooked, currentInvigilators, actionLoading, isRegist
 
       <h3 className="text-lg font-bold text-slate-900 mb-4 line-clamp-2 h-14">{slot.course_name}</h3>
 
-      <div className="space-y-3 mb-6 flex-1">
-        <div className="flex items-center gap-3 text-slate-600">
-          <Clock size={16} className="text-slate-400" />
+      <div className="space-y-3 mb-6 flex-1 text-right">
+        <div className="flex items-center gap-3 text-slate-600 flex-row-reverse">
+          <Clock size={16} className="text-slate-400 shrink-0" />
           <span className="text-xs">{slot.start_time} - {slot.end_time}</span>
         </div>
-        <div className="flex items-center gap-3 text-slate-600">
-          <MapPin size={16} className="text-slate-400" />
+        <div className="flex items-center gap-3 text-slate-600 flex-row-reverse">
+          <MapPin size={16} className="text-slate-400 shrink-0" />
           <span className="text-xs">{slot.location || 'غير محدد'}</span>
         </div>
-        <div className="flex items-center gap-3 text-slate-600">
-          <Users size={16} className="text-slate-400" />
+        <div className="flex items-center gap-3 text-slate-600 flex-row-reverse">
+          <Users size={16} className="text-slate-400 shrink-0" />
           <span className="text-xs">
             {currentInvigilators} / {slot.required_invigilators} مراقبين
             {isFull && !isBooked && (
@@ -453,6 +488,31 @@ function SlotCard({ slot, isBooked, currentInvigilators, actionLoading, isRegist
             )}
           </span>
         </div>
+
+        {/* Display Assigned Room and Attendance */}
+        {isBooked && myBooking && (
+          <div className="mt-4 pt-4 border-t border-slate-100 space-y-2.5">
+            <div className="bg-indigo-50/70 border border-indigo-100 p-2.5 rounded-xl flex items-center justify-between text-indigo-900 text-xs font-bold flex-row-reverse">
+              <span className="text-[11px] text-indigo-700 font-semibold">القاعة المخصصة لك:</span>
+              <span className="bg-indigo-600 text-white px-2 py-0.5 rounded-lg text-xs">{assignedRoom}</span>
+            </div>
+
+            {myBooking.attendance_status && myBooking.attendance_status !== 'pending' && (
+              <div className={`p-2.5 rounded-xl border flex items-center justify-between text-xs font-bold flex-row-reverse ${
+                myBooking.attendance_status === 'present' 
+                  ? 'bg-emerald-50/70 border-emerald-100 text-emerald-800' 
+                  : 'bg-red-50/70 border-red-100 text-red-800'
+              }`}>
+                <span className="text-[11px] font-semibold">حالة حضورك:</span>
+                <span className={`px-2 py-0.5 rounded-lg text-white text-[11px] ${
+                  myBooking.attendance_status === 'present' ? 'bg-emerald-600' : 'bg-red-600'
+                }`}>
+                  {myBooking.attendance_status === 'present' ? 'حاضر' : 'غائب'}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="mt-auto">

@@ -22,7 +22,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     ? [
         { name: 'لوحة التحكم', path: '/admin', icon: LayoutDashboard },
         { name: 'البرنامج الامتحاني', path: '/admin/slots', icon: Calendar },
-        { name: 'الطلاب', path: '/admin/students', icon: Users },
+        { name: 'المراقبين', path: '/admin/students', icon: Users },
         { name: 'الإعدادات', path: '/admin/settings', icon: Settings },
       ]
     : profile?.status !== 'active'
@@ -103,7 +103,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                   </span>
                 ) : (
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 ring-1 ring-inset ring-emerald-200">
-                    طالب
+                    {profile?.observer_type || 'مراقب'}
                   </span>
                 )}
               </div>

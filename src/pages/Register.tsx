@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { UserPlus, Mail, Lock, User, Phone, IdCard, Building, AlertCircle, Camera, Image as ImageIcon, CheckCircle } from 'lucide-react';
+import { UserPlus, Mail, Lock, User, Phone, IdCard, Building, AlertCircle, Camera, Image as ImageIcon, CheckCircle, ChevronDown } from 'lucide-react';
 import { uploadToCloudinary } from '../utils/cloudinary';
 import { Logo } from '../components/Logo';
 
@@ -16,6 +16,7 @@ export default function Register() {
     university_id: '',
     department: '',
     requested_role: 'student' as 'student' | 'admin',
+    observer_type: 'طالب دراسات' as 'طالب دراسات' | 'موظف' | 'أمين قاعة' | 'دكتور مشرف',
   });
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [idCardImage, setIdCardImage] = useState<File | null>(null);
@@ -85,6 +86,7 @@ export default function Register() {
         admin_note: '',
         student_note: '',
         required_hours: 16, // Default
+        observer_type: formData.requested_role === 'student' ? formData.observer_type : 'طالب دراسات',
         createdAt: new Date().toISOString(),
       });
 
@@ -114,7 +116,7 @@ export default function Register() {
         <div className="flex flex-col items-center mb-8">
           <Logo className="w-16 h-16" showText={false} />
           <h1 className="text-3xl font-bold text-indigo-600 mt-4">إنشاء حساب جديد</h1>
-          <p className="text-slate-500 mt-2 text-center">انضم إلى نظام المراقبات الامتحانية كطالب مراقب</p>
+          <p className="text-slate-500 mt-2 text-center">انضم إلى نظام المراقبات الامتحانية كمراقب</p>
           <p className="text-xs text-slate-400 mt-1">جامعة دمشق كلية الهندسة المعمارية</p>
         </div>
 
@@ -256,7 +258,7 @@ export default function Register() {
                         : 'border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-200'
                     }`}
                   >
-                    طالب
+                    مراقب
                   </button>
                   <button
                     type="button"
@@ -271,6 +273,28 @@ export default function Register() {
                   </button>
                 </div>
               </div>
+
+              {formData.requested_role === 'student' && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">صفة المراقب</label>
+                  <div className="relative">
+                    <select
+                      name="observer_type"
+                      value={formData.observer_type}
+                      onChange={(e) => setFormData({ ...formData, observer_type: e.target.value as any })}
+                      className="w-full pr-4 pl-10 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none text-slate-700 font-bold text-sm text-right"
+                    >
+                      <option value="طالب دراسات">طالب دراسات</option>
+                      <option value="موظف">موظف</option>
+                      <option value="أمين قاعة">أمين قاعة</option>
+                      <option value="دكتور مشرف">دكتور مشرف</option>
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-slate-400">
+                      <ChevronDown size={18} />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
                 <div>

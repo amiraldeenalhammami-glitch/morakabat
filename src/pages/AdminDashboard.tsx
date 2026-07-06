@@ -70,7 +70,7 @@ export default function AdminDashboard() {
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">لوحة تحكم المدير</h1>
-          <p className="text-slate-500 mt-1">نظرة عامة على حالة المراقبة والطلاب</p>
+          <p className="text-slate-500 mt-1">نظرة عامة على حالة المراقبة والمراقبين</p>
         </div>
         {canInstall && (
           <button
@@ -89,7 +89,7 @@ export default function AdminDashboard() {
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl w-fit mb-4">
             <Users size={24} />
           </div>
-          <p className="text-sm text-slate-500">إجمالي الطلاب النشطين</p>
+          <p className="text-sm text-slate-500">إجمالي المراقبين النشطين</p>
           <p className="text-3xl font-bold text-slate-900">{students.filter(s => s.status === 'active').length}</p>
         </div>
 
@@ -127,14 +127,14 @@ export default function AdminDashboard() {
       <div className="bg-indigo-600 rounded-3xl p-8 text-white flex flex-col md:flex-row justify-between items-center gap-6">
         <div>
           <h2 className="text-2xl font-bold">إجراءات سريعة</h2>
-          <p className="text-indigo-100 mt-1">إدارة النظام والطلاب والبرنامج الامتحاني من مكان واحد</p>
+          <p className="text-indigo-100 mt-1">إدارة النظام والمراقبين والبرنامج الامتحاني من مكان واحد</p>
         </div>
         <div className="flex flex-wrap gap-3">
           <Link to="/admin/slots" className="px-6 py-3 bg-white text-indigo-600 rounded-2xl font-bold hover:bg-indigo-50 transition-colors">
             إدارة البرنامج
           </Link>
           <Link to="/admin/students" className="px-6 py-3 bg-indigo-500 text-white rounded-2xl font-bold hover:bg-indigo-400 transition-colors">
-            إدارة الطلاب
+            إدارة المراقبين
           </Link>
           <Link to="/admin/settings" className="px-6 py-3 bg-indigo-700 text-white rounded-2xl font-bold hover:bg-indigo-800 transition-colors">
             الإعدادات العامة
@@ -175,7 +175,7 @@ export default function AdminDashboard() {
         {/* Student Progress Summary */}
         <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
           <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-            <h3 className="font-bold text-slate-900">إنجاز الطلاب</h3>
+            <h3 className="font-bold text-slate-900">إنجاز المراقبين</h3>
             <Link to="/admin/students" className="text-indigo-600 text-sm font-bold flex items-center gap-1">
               عرض الكل <ArrowRight size={16} />
             </Link>
@@ -204,7 +204,7 @@ export default function AdminDashboard() {
               );
             })}
             {students.length === 0 && (
-              <div className="p-12 text-center text-slate-500">لا يوجد طلاب مسجلين بعد.</div>
+              <div className="p-12 text-center text-slate-500">لا يوجد مراقبون مسجلون بعد.</div>
             )}
           </div>
         </div>

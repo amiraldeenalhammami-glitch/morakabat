@@ -1,9 +1,71 @@
-export const uploadToCloudinary = async (file: File): Promise<string> => {
-  const cloudName = (import.meta as any).env.VITE_CLOUDINARY_CLOUD_NAME;
-  const uploadPreset = (import.meta as any).env.VITE_CLOUDINARY_UPLOAD_PRESET;
+const compressAndConvertToBase64 = (file: File, maxWidth = 400, maxHeight = 400, quality = 0.4): Promise<string> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      try {
+        const img = new Image();
+        img.src = dataUrl;
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
 
+            // Resize logic while preserving aspect ratio
+            if (width > height) {
+              if (width > maxWidth) {
+                height = Math.round((height * maxWidth) / width);
+                width = maxWidth;
+              }
+            } else {
+              if (height > maxHeight) {
+                width = Math.round((width * maxHeight) / height);
+                height = maxHeight;
+              }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              resolve(dataUrl); // fallback to original base64
+              return;
+            }
+
+            ctx.drawImage(img, 0, 0, width, height);
+            // Get compressed JPEG data URL
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+            resolve(compressedDataUrl);
+          } catch (canvasErr) {
+            console.warn('Canvas compression error, falling back to original base64', canvasErr);
+            resolve(dataUrl);
+          }
+        };
+        img.onerror = () => {
+          resolve(dataUrl); // fallback to original base64
+        };
+      } catch (imgErr) {
+        console.warn('Image loading error, falling back to original base64', imgErr);
+        resolve(dataUrl);
+      }
+    };
+    reader.onerror = () => {
+      resolve(''); // fallback to empty
+    };
+  });
+};
+
+export const uploadToCloudinary = async (file: File): Promise<string> => {
+  const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+  const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+
+  // If Cloudinary configuration is missing, use Base64 fallback immediately
   if (!cloudName || !uploadPreset) {
-    throw new Error('Cloudinary configuration is missing. Please set VITE_CLOUDINARY_CLOUD_NAME and VITE_CLOUDINARY_UPLOAD_PRESET.');
+    console.warn('Cloudinary config is missing. Falling back to compressed Base64 representation.');
+    return compressAndConvertToBase64(file);
   }
 
   const formData = new FormData();
@@ -20,14 +82,15 @@ export const uploadToCloudinary = async (file: File): Promise<string> => {
     );
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error?.message || 'Failed to upload image to Cloudinary');
+      console.warn('Cloudinary response not OK, falling back to Base64.');
+      return compressAndConvertToBase64(file);
     }
 
     const data = await response.json();
     return data.secure_url;
   } catch (error: any) {
-    console.error('Cloudinary upload error:', error);
-    throw new Error(error.message || 'An error occurred during image upload');
+    console.warn('Cloudinary upload failed, falling back to Base64.', error);
+    return compressAndConvertToBase64(file);
   }
 };
+

@@ -265,7 +265,7 @@ export default function AdminSettings() {
             </div>
             <p className="text-xs text-slate-400 mt-2">
               {isSuperAdmin 
-                ? "هذه كلمة المرور الموحدة التي يضعها السوبر أدمن، وتستخدم لتأكيد كافة العمليات الحساسة (مثل تصفير البرنامج، حذف الطلاب، حذف المواد، تفعيل/تجميد الحسابات)."
+                ? "هذه كلمة المرور الموحدة التي يضعها السوبر أدمن، وتستخدم لتأكيد كافة العمليات الحساسة (مثل تصفير البرنامج، حذف المراقبين، حذف المواد، تفعيل/تجميد الحسابات)."
                 : "كلمة المرور الموحدة تظهر ويتم تعديلها فقط بواسطة السوبر أدمن."}
             </p>
           </div>
@@ -282,7 +282,7 @@ export default function AdminSettings() {
               />
               <span className="text-slate-500 font-medium">ساعة</span>
             </div>
-            <p className="text-xs text-slate-400 mt-2">هذا الرقم سيطبق على جميع الطلاب الذين لم يتم تحديد ساعات خاصة بهم.</p>
+            <p className="text-xs text-slate-400 mt-2">هذا الرقم سيطبق على جميع المراقبين الذين لم يتم تحديد ساعات خاصة بهم.</p>
           </div>
         </div>
 
@@ -311,12 +311,12 @@ export default function AdminSettings() {
             </div>
             <div>
               <h2 className="text-2xl font-bold text-slate-900">إدارة المدراء</h2>
-              <p className="text-sm text-slate-500">ترقية الطلاب أو سحب صلاحيات المدراء (الحد الأقصى: 5)</p>
+              <p className="text-sm text-slate-500">ترقية المراقبين أو سحب صلاحيات المدراء (الحد الأقصى: 5)</p>
             </div>
           </div>
 
           <div className="space-y-4">
-            <h3 className="font-bold text-slate-900 text-sm">ترقية طالب إلى مدير</h3>
+            <h3 className="font-bold text-slate-900 text-sm">ترقية مراقب إلى مدير</h3>
             <div className="flex gap-3">
               <select 
                 className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -325,7 +325,7 @@ export default function AdminSettings() {
                 }}
                 defaultValue=""
               >
-                <option value="" disabled>اختر طالباً لترقيته...</option>
+                <option value="" disabled>اختر مراقباً لترقيته...</option>
                 {activeStudents.map(student => (
                   <option key={student.uid} value={student.uid}>{student.name} ({student.email})</option>
                 ))}
@@ -355,7 +355,7 @@ export default function AdminSettings() {
                     <button
                       onClick={() => handleDemoteToStudent(admin.uid)}
                       className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
-                      title="سحب الصلاحية وتحويل لطالب"
+                      title="سحب الصلاحية وتحويل لمراقب"
                     >
                       <UserMinus size={20} />
                     </button>
