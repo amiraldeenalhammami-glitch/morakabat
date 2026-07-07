@@ -237,6 +237,15 @@ export default function BookingPage() {
     }
   };
 
+  const formatDateSafe = (dateStr: string | undefined) => {
+    if (!dateStr) return 'غير محدد';
+    try {
+      return format(parseISO(dateStr), 'dd MMMM yyyy', { locale: ar });
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center py-20">
       <Loader2 className="animate-spin text-indigo-600" size={40} />
@@ -266,15 +275,99 @@ export default function BookingPage() {
         </div>
       </header>
 
-      {regMessage && (
-        <div className="bg-amber-50 border border-amber-200 p-6 rounded-3xl flex items-center gap-4 text-amber-800">
-          <AlertCircle size={24} className="shrink-0" />
-          <div>
-            <p className="font-bold">{regMessage}</p>
-            <p className="text-sm opacity-90">يرجى مراجعة الإدارة لأي استفسارات إضافية.</p>
+      {/* Real-time Registration and Exams Schedule Panel */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6" dir="rtl">
+        {/* Card 1: Registration and Booking Period */}
+        <div className={`rounded-3xl border p-6 flex flex-col justify-between gap-4 transition-all shadow-sm ${
+          isRegistrationActive() 
+            ? 'bg-emerald-50/30 border-emerald-100 text-emerald-950' 
+            : 'bg-rose-50/30 border-rose-100 text-rose-950'
+        }`}>
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`p-2.5 rounded-2xl ${isRegistrationActive() ? 'bg-emerald-100/80 text-emerald-700' : 'bg-rose-100/80 text-rose-700'}`}>
+                <CalendarIcon size={22} />
+              </div>
+              <div>
+                <h2 className="font-bold text-base text-slate-800">فترة التسجيل وحجز المراقبات</h2>
+                <p className="text-xs text-slate-500 mt-0.5">النطاق المتاح لحجز الفترات أو التعديل عليها وإلغائها</p>
+              </div>
+            </div>
+            
+            <span className={`px-3 py-1 rounded-full text-xs font-bold shrink-0 ${
+              isRegistrationActive() 
+                ? 'bg-emerald-100 text-emerald-800' 
+                : 'bg-rose-100 text-rose-800'
+            }`}>
+              {isRegistrationActive() ? 'مفتوح الآن' : 'مغلق حالياً'}
+            </span>
           </div>
+
+          <div className="grid grid-cols-2 gap-4 bg-white/95 border border-slate-100 p-4 rounded-2xl text-right">
+            <div>
+              <span className="block text-xs font-medium text-slate-400">تاريخ بدء التسجيل</span>
+              <span className="text-sm font-bold text-slate-700 mt-1 block">
+                {formatDateSafe(globalSettings?.registration_start)}
+              </span>
+            </div>
+            <div className="border-r border-slate-100 pr-4">
+              <span className="block text-xs font-medium text-slate-400">تاريخ إغلاق الحجز</span>
+              <span className="text-sm font-bold text-slate-700 mt-1 block">
+                {formatDateSafe(globalSettings?.registration_end)}
+              </span>
+            </div>
+          </div>
+
+          <p className="text-xs leading-relaxed text-slate-500">
+            {isRegistrationActive() ? (
+              <span className="flex items-center gap-1.5">
+                <span className="text-emerald-500 text-sm">●</span>
+                <span>بإمكانك حجز وتعديل فتراتك بحرية تامة حتى موعد الإغلاق المحدد.</span>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-rose-600 font-medium">
+                <span className="text-rose-500 text-sm">●</span>
+                <span>{regMessage || 'فترة الحجز مغلقة حالياً. تم قفل كافة حجوزاتك ومنع الإضافة أو الإلغاء.'}</span>
+              </span>
+            )}
+          </p>
         </div>
-      )}
+
+        {/* Card 2: Exams Period */}
+        <div className="bg-indigo-50/30 border border-indigo-100/60 rounded-3xl p-6 flex flex-col justify-between gap-4 text-indigo-950 shadow-sm">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-2xl bg-indigo-100/80 text-indigo-700">
+                <Clock size={22} />
+              </div>
+              <div>
+                <h2 className="font-bold text-base text-slate-800">فترة الامتحانات المعتمدة</h2>
+                <p className="text-xs text-slate-500 mt-0.5">النطاق الزمني الكلي لجميع فترات وجداول الامتحانات</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 bg-white/95 border border-slate-100 p-4 rounded-2xl text-right">
+            <div>
+              <span className="block text-xs font-medium text-slate-400">تاريخ أول امتحان</span>
+              <span className="text-sm font-bold text-slate-700 mt-1 block">
+                {formatDateSafe(globalSettings?.exam_start)}
+              </span>
+            </div>
+            <div className="border-r border-slate-100 pr-4">
+              <span className="block text-xs font-medium text-slate-400">تاريخ آخر امتحان</span>
+              <span className="text-sm font-bold text-slate-700 mt-1 block">
+                {formatDateSafe(globalSettings?.exam_end)}
+              </span>
+            </div>
+          </div>
+
+          <p className="text-xs leading-relaxed text-slate-500 flex items-center gap-1.5">
+            <span className="text-indigo-500 text-sm">ℹ️</span>
+            <span>هذا النطاق هو المعتمد في جدول الكلية للفصل الدراسي الحالي.</span>
+          </p>
+        </div>
+      </div>
 
       {viewMode === 'calendar' ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
