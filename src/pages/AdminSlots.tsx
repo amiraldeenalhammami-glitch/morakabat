@@ -914,12 +914,15 @@ export default function AdminSlots() {
       {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden my-8 animate-in fade-in zoom-in duration-200 flex flex-col max-h-[90vh]">
+          <form 
+            onSubmit={handleSubmit} 
+            className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden my-8 animate-in fade-in zoom-in duration-200 flex flex-col max-h-[calc(100vh-2rem)] md:max-h-[90vh]"
+          >
             <div className="p-6 border-b flex justify-between items-center bg-slate-50 shrink-0">
               <h2 className="text-xl font-bold text-slate-900">{editingSlot ? 'تعديل مادة' : 'إضافة مادة جديدة'}</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={24} /></button>
+              <button type="button" onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={24} /></button>
             </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
+            <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
               <div className="grid grid-cols-2 gap-4">
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-slate-700 mb-1">اسم المادة</label>
@@ -1229,19 +1232,20 @@ export default function AdminSlots() {
                 </div>
               )}
 
-              <div className="pt-4 flex gap-3 shrink-0">
-                <button type="submit" className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors">حفظ</button>
-                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition-colors">إلغاء</button>
-              </div>
-            </form>
-          </div>
+            </div>
+
+            <div className="p-6 border-t bg-slate-50 flex gap-3 shrink-0">
+              <button type="submit" className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors">حفظ</button>
+              <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition-colors">إلغاء</button>
+            </div>
+          </form>
         </div>
       )}
 
       {/* CSV Upload & Analysis Modal */}
       {isUploadModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto animate-in fade-in duration-200 text-right" dir="rtl">
-          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-xl border border-slate-100 animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[calc(100vh-2rem)] md:max-h-[90vh] overflow-hidden flex flex-col shadow-xl border border-slate-100 animate-in zoom-in-95 duration-200">
             {/* Header */}
             <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between flex-row-reverse">
               <h2 className="text-xl font-bold text-slate-900 font-sans flex items-center gap-2">

@@ -975,7 +975,7 @@ export default function AdminStudents() {
       {/* Edit Hours Modal */}
       {editingHours && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 border border-slate-100">
+          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 border border-slate-100 max-h-[calc(100vh-2rem)] overflow-y-auto">
             <h2 className="text-xl font-bold text-slate-900 mb-4 text-right">تعديل الساعات المطلوبة</h2>
             <div className="space-y-4 text-right">
               <div>
