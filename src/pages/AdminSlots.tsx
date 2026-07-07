@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, getDoc, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { ExamSlot, Booking, AppSettings, UserProfile } from '../types';
+import { ExamSlot, Booking, AppSettings, UserProfile, RoomRange } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
 import { Plus, Trash2, Edit2, X, Check, Calendar, Clock, MapPin, Users, Loader2, User, Download, Shield, AlertCircle, Sparkles, Upload, ChevronDown } from 'lucide-react';
 import SecurityConfirmModal from '../components/SecurityConfirmModal';
@@ -72,6 +72,7 @@ export default function AdminSlots() {
     has_expansions: false,
     expansions_from: 1,
     expansions_to: 6,
+    room_ranges: [] as RoomRange[],
   });
 
   useEffect(() => {
@@ -180,6 +181,15 @@ export default function AdminSlots() {
   };
 
   const getRoomsCount = (data: typeof formData) => {
+    if (data.room_ranges && data.room_ranges.length > 0) {
+      return data.room_ranges.reduce((acc, range) => {
+        if (range.to >= range.from) {
+          return acc + (range.to - range.from + 1);
+        }
+        return acc;
+      }, 0);
+    }
+
     let count = 0;
     if (data.has_studios && data.studios_to >= data.studios_from) {
       count += (data.studios_to - data.studios_from + 1);
@@ -226,6 +236,7 @@ export default function AdminSlots() {
       has_expansions: false,
       expansions_from: 1,
       expansions_to: 6,
+      room_ranges: [] as RoomRange[],
     });
   };
 
@@ -237,8 +248,48 @@ export default function AdminSlots() {
         ? (roomsCount * formData.observers_per_room) 
         : formData.required_invigilators;
 
+      const has_studios = formData.room_ranges.some(r => r.type === 'المرسم');
+      const studios_range = formData.room_ranges.find(r => r.type === 'المرسم');
+      const studios_from = studios_range ? studios_range.from : (formData.has_studios ? formData.studios_from : 1);
+      const studios_to = studios_range ? studios_range.to : (formData.has_studios ? formData.studios_to : 8);
+
+      const has_lobbies = formData.room_ranges.some(r => r.type === 'البهو');
+      const lobbies_range = formData.room_ranges.find(r => r.type === 'البهو');
+      const lobbies_from = lobbies_range ? lobbies_range.from : (formData.has_lobbies ? formData.lobbies_from : 1);
+      const lobbies_to = lobbies_range ? lobbies_range.to : (formData.has_lobbies ? formData.lobbies_to : 3);
+
+      const has_basements = formData.room_ranges.some(r => r.type === 'القبو');
+      const basements_range = formData.room_ranges.find(r => r.type === 'القبو');
+      const basements_from = basements_range ? basements_range.from : (formData.has_basements ? formData.basements_from : 1);
+      const basements_to = basements_range ? basements_range.to : (formData.has_basements ? formData.basements_to : 3);
+
+      const has_halls = formData.room_ranges.some(r => r.type === 'القاعات');
+      const halls_range = formData.room_ranges.find(r => r.type === 'القاعات');
+      const halls_from = halls_range ? halls_range.from : (formData.has_halls ? formData.halls_from : 1);
+      const halls_to = halls_range ? halls_range.to : (formData.has_halls ? formData.halls_to : 2);
+
+      const has_expansions = formData.room_ranges.some(r => r.type === 'التوسع');
+      const expansions_range = formData.room_ranges.find(r => r.type === 'التوسع');
+      const expansions_from = expansions_range ? expansions_range.from : (formData.has_expansions ? formData.expansions_from : 1);
+      const expansions_to = expansions_range ? expansions_range.to : (formData.has_expansions ? formData.expansions_to : 6);
+
       const data = {
         ...formData,
+        has_studios,
+        studios_from,
+        studios_to,
+        has_lobbies,
+        lobbies_from,
+        lobbies_to,
+        has_basements,
+        basements_from,
+        basements_to,
+        has_halls,
+        halls_from,
+        halls_to,
+        has_expansions,
+        expansions_from,
+        expansions_to,
         required_invigilators: reqInvigilators,
         current_invigilators: editingSlot?.current_invigilators || 0
       };
@@ -458,6 +509,29 @@ export default function AdminSlots() {
     }
   };
 
+  const getRoomRangesFromSlot = (slot: ExamSlot): RoomRange[] => {
+    if (slot.room_ranges && Array.isArray(slot.room_ranges)) {
+      return slot.room_ranges;
+    }
+    const ranges: RoomRange[] = [];
+    if (slot.has_studios) {
+      ranges.push({ type: 'المرسم', from: Number(slot.studios_from) || 1, to: Number(slot.studios_to) || 8 });
+    }
+    if (slot.has_lobbies) {
+      ranges.push({ type: 'البهو', from: Number(slot.lobbies_from) || 1, to: Number(slot.lobbies_to) || 3 });
+    }
+    if (slot.has_basements) {
+      ranges.push({ type: 'القبو', from: Number(slot.basements_from) || 1, to: Number(slot.basements_to) || 3 });
+    }
+    if (slot.has_halls) {
+      ranges.push({ type: 'القاعات', from: Number(slot.halls_from) || 1, to: Number(slot.halls_to) || 2 });
+    }
+    if (slot.has_expansions) {
+      ranges.push({ type: 'التوسع', from: Number(slot.expansions_from) || 1, to: Number(slot.expansions_to) || 6 });
+    }
+    return ranges;
+  };
+
   const openEdit = (slot: ExamSlot) => {
     setEditingSlot(slot);
     
@@ -500,8 +574,32 @@ export default function AdminSlots() {
       has_expansions: slot.has_expansions ?? false,
       expansions_from: slot.expansions_from ?? 1,
       expansions_to: slot.expansions_to ?? 6,
+      room_ranges: getRoomRangesFromSlot(slot),
     });
     setIsModalOpen(true);
+  };
+
+  const addRoomRange = () => {
+    const updatedRanges = [
+      ...formData.room_ranges,
+      { type: 'المرسم' as const, from: 1, to: 1 }
+    ];
+    setFormData({ ...formData, room_ranges: updatedRanges });
+  };
+
+  const updateRoomRange = (index: number, field: keyof RoomRange, value: any) => {
+    const updatedRanges = formData.room_ranges.map((range, idx) => {
+      if (idx === index) {
+        return { ...range, [field]: value };
+      }
+      return range;
+    });
+    setFormData({ ...formData, room_ranges: updatedRanges });
+  };
+
+  const removeRoomRange = (index: number) => {
+    const updatedRanges = formData.room_ranges.filter((_, idx) => idx !== index);
+    setFormData({ ...formData, room_ranges: updatedRanges });
   };
 
   const handleCompleteProgram = () => {
@@ -1034,169 +1132,81 @@ export default function AdminSlots() {
 
               {/* Dynamic room range inputs */}
               <div className="border-t border-slate-200 pt-4 space-y-3">
-                <h3 className="text-sm font-bold text-slate-800">توزيع وتحديد القاعات (المراسم والقاعات) لهذه المادة</h3>
-                
-                <div className="space-y-2">
-                  {/* Studios */}
-                  <div className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                    <input
-                      type="checkbox"
-                      id="has_studios"
-                      checked={formData.has_studios}
-                      onChange={(e) => setFormData({ ...formData, has_studios: e.target.checked })}
-                      className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
-                    />
-                    <label htmlFor="has_studios" className="text-xs font-bold text-slate-700 w-16 shrink-0">المراسم</label>
-                    <div className="flex items-center gap-2 flex-1">
-                      <span className="text-xs text-slate-500">من</span>
-                      <input
-                        type="number"
-                        min="1"
-                        disabled={!formData.has_studios}
-                        value={formData.studios_from}
-                        onChange={(e) => setFormData({ ...formData, studios_from: parseInt(e.target.value) || 1 })}
-                        className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-50"
-                      />
-                      <span className="text-xs text-slate-500">إلى</span>
-                      <input
-                        type="number"
-                        min="1"
-                        disabled={!formData.has_studios}
-                        value={formData.studios_to}
-                        onChange={(e) => setFormData({ ...formData, studios_to: parseInt(e.target.value) || 1 })}
-                        className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-50"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Lobbies */}
-                  <div className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                    <input
-                      type="checkbox"
-                      id="has_lobbies"
-                      checked={formData.has_lobbies}
-                      onChange={(e) => setFormData({ ...formData, has_lobbies: e.target.checked })}
-                      className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
-                    />
-                    <label htmlFor="has_lobbies" className="text-xs font-bold text-slate-700 w-16 shrink-0">البهو</label>
-                    <div className="flex items-center gap-2 flex-1">
-                      <span className="text-xs text-slate-500">من</span>
-                      <input
-                        type="number"
-                        min="1"
-                        disabled={!formData.has_lobbies}
-                        value={formData.lobbies_from}
-                        onChange={(e) => setFormData({ ...formData, lobbies_from: parseInt(e.target.value) || 1 })}
-                        className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-50"
-                      />
-                      <span className="text-xs text-slate-500">إلى</span>
-                      <input
-                        type="number"
-                        min="1"
-                        disabled={!formData.has_lobbies}
-                        value={formData.lobbies_to}
-                        onChange={(e) => setFormData({ ...formData, lobbies_to: parseInt(e.target.value) || 1 })}
-                        className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-50"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Basements */}
-                  <div className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                    <input
-                      type="checkbox"
-                      id="has_basements"
-                      checked={formData.has_basements}
-                      onChange={(e) => setFormData({ ...formData, has_basements: e.target.checked })}
-                      className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
-                    />
-                    <label htmlFor="has_basements" className="text-xs font-bold text-slate-700 w-16 shrink-0">القبو</label>
-                    <div className="flex items-center gap-2 flex-1">
-                      <span className="text-xs text-slate-500">من</span>
-                      <input
-                        type="number"
-                        min="1"
-                        disabled={!formData.has_basements}
-                        value={formData.basements_from}
-                        onChange={(e) => setFormData({ ...formData, basements_from: parseInt(e.target.value) || 1 })}
-                        className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-50"
-                      />
-                      <span className="text-xs text-slate-500">إلى</span>
-                      <input
-                        type="number"
-                        min="1"
-                        disabled={!formData.has_basements}
-                        value={formData.basements_to}
-                        onChange={(e) => setFormData({ ...formData, basements_to: parseInt(e.target.value) || 1 })}
-                        className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-50"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Halls */}
-                  <div className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                    <input
-                      type="checkbox"
-                      id="has_halls"
-                      checked={formData.has_halls}
-                      onChange={(e) => setFormData({ ...formData, has_halls: e.target.checked })}
-                      className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
-                    />
-                    <label htmlFor="has_halls" className="text-xs font-bold text-slate-700 w-16 shrink-0">القاعات</label>
-                    <div className="flex items-center gap-2 flex-1">
-                      <span className="text-xs text-slate-500">من</span>
-                      <input
-                        type="number"
-                        min="1"
-                        disabled={!formData.has_halls}
-                        value={formData.halls_from}
-                        onChange={(e) => setFormData({ ...formData, halls_from: parseInt(e.target.value) || 1 })}
-                        className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-50"
-                      />
-                      <span className="text-xs text-slate-500">إلى</span>
-                      <input
-                        type="number"
-                        min="1"
-                        disabled={!formData.has_halls}
-                        value={formData.halls_to}
-                        onChange={(e) => setFormData({ ...formData, halls_to: parseInt(e.target.value) || 1 })}
-                        className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-50"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Expansions */}
-                  <div className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                    <input
-                      type="checkbox"
-                      id="has_expansions"
-                      checked={formData.has_expansions}
-                      onChange={(e) => setFormData({ ...formData, has_expansions: e.target.checked })}
-                      className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
-                    />
-                    <label htmlFor="has_expansions" className="text-xs font-bold text-slate-700 w-16 shrink-0">التوسع</label>
-                    <div className="flex items-center gap-2 flex-1">
-                      <span className="text-xs text-slate-500">من</span>
-                      <input
-                        type="number"
-                        min="1"
-                        disabled={!formData.has_expansions}
-                        value={formData.expansions_from}
-                        onChange={(e) => setFormData({ ...formData, expansions_from: parseInt(e.target.value) || 1 })}
-                        className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-50"
-                      />
-                      <span className="text-xs text-slate-500">إلى</span>
-                      <input
-                        type="number"
-                        min="1"
-                        disabled={!formData.has_expansions}
-                        value={formData.expansions_to}
-                        onChange={(e) => setFormData({ ...formData, expansions_to: parseInt(e.target.value) || 1 })}
-                        className="w-16 px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none disabled:opacity-50"
-                      />
-                    </div>
-                  </div>
+                <div className="flex justify-between items-center">
+                  <h3 className="text-sm font-bold text-slate-800">توزيع وتحديد القاعات (المراسم والقاعات) لهذه المادة</h3>
+                  <button
+                    type="button"
+                    onClick={addRoomRange}
+                    className="flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+                  >
+                    <Plus size={14} />
+                    <span>إضافة موقع +</span>
+                  </button>
                 </div>
+                
+                {formData.room_ranges && formData.room_ranges.length > 0 ? (
+                  <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
+                    {formData.room_ranges.map((range, index) => (
+                      <div key={index} className="flex flex-wrap md:flex-nowrap items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-100 animate-in fade-in slide-in-from-top-1 duration-150">
+                        <div className="flex-1 min-w-[120px]">
+                          <select
+                            value={range.type}
+                            onChange={(e) => updateRoomRange(index, 'type', e.target.value as any)}
+                            className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:ring-1 focus:ring-indigo-500 outline-none"
+                          >
+                            <option value="المرسم">المرسم</option>
+                            <option value="البهو">البهو</option>
+                            <option value="القبو">القبو</option>
+                            <option value="القاعات">القاعات</option>
+                            <option value="التوسع">التوسع</option>
+                          </select>
+                        </div>
+                        
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold text-slate-500">من</span>
+                          <input
+                            type="number"
+                            min="1"
+                            value={range.from}
+                            onChange={(e) => updateRoomRange(index, 'from', Math.max(1, parseInt(e.target.value) || 1))}
+                            className="w-14 px-1.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-center focus:ring-1 focus:ring-indigo-500 outline-none"
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold text-slate-500">إلى</span>
+                          <input
+                            type="number"
+                            min="1"
+                            value={range.to}
+                            onChange={(e) => updateRoomRange(index, 'to', Math.max(1, parseInt(e.target.value) || 1))}
+                            className="w-14 px-1.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-center focus:ring-1 focus:ring-indigo-500 outline-none"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => removeRoomRange(index)}
+                          className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors mr-auto"
+                          title="حذف هذا الموقع"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 p-4">
+                    <p className="text-xs text-slate-400 font-medium">لا توجد قاعات أو مراسم محددة لهذه المادة حالياً</p>
+                    <button
+                      type="button"
+                      onClick={addRoomRange}
+                      className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:underline"
+                    >
+                      اضغط هنا لإضافة أول موقع
+                    </button>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4 mt-3">
                   <div>

@@ -21,6 +21,12 @@ export interface UserProfile {
   observer_type?: ObserverType;
 }
 
+export interface RoomRange {
+  type: 'المرسم' | 'البهو' | 'القبو' | 'القاعات' | 'التوسع';
+  from: number;
+  to: number;
+}
+
 export interface ExamSlot {
   id: string;
   course_name: string;
@@ -51,6 +57,7 @@ export interface ExamSlot {
   has_expansions?: boolean;
   expansions_from?: number;
   expansions_to?: number;
+  room_ranges?: RoomRange[];
 }
 
 export interface Booking {

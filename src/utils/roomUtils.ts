@@ -2,6 +2,29 @@ import { ExamSlot, Booking, ObserverType } from '../types';
 
 export function getSlotRooms(slot: ExamSlot): string[] {
   const rooms: string[] = [];
+
+  // Check if new dynamic room ranges exist
+  if (slot.room_ranges && Array.isArray(slot.room_ranges) && slot.room_ranges.length > 0) {
+    slot.room_ranges.forEach((range) => {
+      const from = range.from !== undefined ? Number(range.from) : 1;
+      const to = range.to !== undefined ? Number(range.to) : 1;
+      const type = range.type;
+
+      let prefix = '';
+      if (type === 'المرسم') prefix = 'مرسم';
+      else if (type === 'البهو') prefix = 'بهو';
+      else if (type === 'القبو') prefix = 'قبو';
+      else if (type === 'القاعات') prefix = 'قاعة';
+      else if (type === 'التوسع') prefix = 'توسع';
+
+      if (prefix && to >= from) {
+        for (let i = from; i <= to; i++) {
+          rooms.push(`${prefix} ${i}`);
+        }
+      }
+    });
+    return rooms;
+  }
   
   const studios_from = slot.studios_from !== undefined ? Number(slot.studios_from) : 1;
   const studios_to = slot.studios_to !== undefined ? Number(slot.studios_to) : 8;
