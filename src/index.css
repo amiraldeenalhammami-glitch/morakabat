@@ -8,9 +8,17 @@
 @layer base {
   html {
     direction: rtl;
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
   }
   
   body {
     @apply bg-slate-50 text-slate-900;
+    overflow-x: hidden;
+  }
+
+  /* Smooth momentum touch scrolling on mobile devices */
+  .overflow-x-auto, .overflow-y-auto {
+    -webkit-overflow-scrolling: touch;
   }
 }

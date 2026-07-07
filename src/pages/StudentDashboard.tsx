@@ -338,14 +338,14 @@ export default function StudentDashboard() {
               <CalendarIcon className="text-slate-400" size={20} />
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-right">
+              <table className="w-full text-right whitespace-nowrap md:whitespace-normal">
                 <thead>
                   <tr className="bg-slate-50 text-slate-500 text-sm">
-                    <th className="px-6 py-4 font-medium">المادة</th>
-                    <th className="px-6 py-4 font-medium">التاريخ</th>
-                    <th className="px-6 py-4 font-medium">الساعات ووقت البدء</th>
-                    <th className="px-6 py-4 font-medium">موقع المراقبة</th>
-                    <th className="px-6 py-4 font-medium">الحالة</th>
+                    <th className="px-3 md:px-6 py-4 font-medium">المادة</th>
+                    <th className="px-3 md:px-6 py-4 font-medium">التاريخ</th>
+                    <th className="px-3 md:px-6 py-4 font-medium">الساعات ووقت البدء</th>
+                    <th className="px-3 md:px-6 py-4 font-medium">موقع المراقبة</th>
+                    <th className="px-3 md:px-6 py-4 font-medium">الحالة</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -358,21 +358,21 @@ export default function StudentDashboard() {
                       
                       return (
                         <tr key={booking.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-6 py-4 font-medium text-slate-900">{booking.course_name}</td>
-                          <td className="px-6 py-4 text-slate-600">{booking.exam_date}</td>
-                          <td className="px-6 py-4 text-slate-600">
+                          <td className="px-3 md:px-6 py-4 font-medium text-slate-900 whitespace-normal min-w-[150px]">{booking.course_name}</td>
+                          <td className="px-3 md:px-6 py-4 text-slate-600">{booking.exam_date}</td>
+                          <td className="px-3 md:px-6 py-4 text-slate-600">
                             <div className="flex flex-col gap-0.5">
                               <span className="font-semibold text-slate-800">{booking.booked_hours} ساعة</span>
                               <span className="text-xs text-slate-400">البدء: {startTime}</span>
                             </div>
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-3 md:px-6 py-4">
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50/50 text-indigo-700 rounded-full text-xs font-bold border border-indigo-100">
                               <MapPin size={13} className="text-indigo-400" />
                               <span>{room}</span>
                             </span>
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-3 md:px-6 py-4">
                             {booking.attendance_status === 'present' ? (
                               <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-bold ring-1 ring-emerald-200">
                                 <CheckCircle2 size={14} />

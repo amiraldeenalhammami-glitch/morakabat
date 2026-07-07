@@ -5,7 +5,7 @@ import { auth, db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { ExamSlot, Booking, AppSettings } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
-import { Calendar as CalendarIcon, MapPin, Clock, Users, Check, AlertCircle, Loader2, ChevronRight, ChevronLeft, Award } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Clock, Users, Check, AlertCircle, Loader2, ChevronRight, ChevronLeft, Award, XCircle, Info, CheckCircle2 } from 'lucide-react';
 import { format, parseISO, differenceInHours, eachDayOfInterval, isSameDay, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isWithinInterval } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { getSlotRooms, getObserverRoom } from '../utils/roomUtils';
@@ -22,6 +22,33 @@ export default function BookingPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<'calendar' | 'years'>('calendar');
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'warning' | 'error' | 'success' | 'info';
+    onConfirm?: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
+
+  const showAlert = (
+    title: string,
+    message: string,
+    type: 'warning' | 'error' | 'success' | 'info',
+    onConfirm?: () => void
+  ) => {
+    setAlertModal({
+      isOpen: true,
+      title,
+      message,
+      type,
+      onConfirm,
+    });
+  };
 
   const myBookings = allBookings.filter(b => b.student_id === profile?.uid);
 
@@ -113,13 +140,13 @@ export default function BookingPage() {
     if (!profile) return;
     
     if (!isRegistrationActive()) {
-      alert('عذراً، فترة التسجيل مغلقة حالياً.');
+      showAlert('فترة التسجيل مغلقة', 'عذراً، فترة التسجيل مغلقة حالياً.', 'error');
       return;
     }
     
     const currentInvigilators = slotBookings[slot.id] || 0;
     if (currentInvigilators >= slot.required_invigilators) {
-      alert('عذراً، اكتمل العدد المطلوب لهذه الفترة. يرجى اختيار فترة أخرى.');
+      showAlert('الفترة ممتلئة', 'عذراً، اكتمل العدد المطلوب لهذه الفترة. يرجى اختيار فترة أخرى.', 'error');
       return;
     }
 
@@ -140,46 +167,59 @@ export default function BookingPage() {
     }
 
     if (totalBookedHours >= requiredHours) {
-      alert('عذراً، لا يمكنك حجز مواد إضافية لأن برنامجك الامتحاني مكتمل النصاب ومقفل بالكامل.');
+      showAlert(
+        'برنامجك الامتحاني مكتمل',
+        'عذراً، لا يمكنك حجز مواد إضافية لأن برنامجك الامتحاني مكتمل النصاب ومقفل بالكامل.',
+        'error'
+      );
       return;
     }
 
-    if (totalBookedHours + slotHours > requiredHours) {
-      alert('تنويه: عدد ساعات هذه المادة يتجاوز نصابك المتبقي. يسمح لك بحجزها استثنائياً كونها المادة الأخيرة لإغلاق برنامجك الساعي بنجاح.');
-    }
-
-    setActionLoading(slot.id);
-    console.log('Booking attempt:', {
-      student_id: profile.uid,
-      slot_id: slot.id,
-      booked_hours: slotHours,
-      student_name: profile.name,
-      course_name: slot.course_name,
-      exam_date: slot.exam_date,
-      auth_uid: auth.currentUser?.uid
-    });
-    try {
-      // Create booking
-      await addDoc(collection(db, 'bookings'), {
+    const proceedWithBooking = async () => {
+      setActionLoading(slot.id);
+      console.log('Booking attempt:', {
         student_id: profile.uid,
         slot_id: slot.id,
         booked_hours: slotHours,
         student_name: profile.name,
         course_name: slot.course_name,
         exam_date: slot.exam_date,
-        observer_type: profile.observer_type || 'طالب دراسات',
-        createdAt: new Date().toISOString()
+        auth_uid: auth.currentUser?.uid
       });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'bookings');
-    } finally {
-      setActionLoading(null);
+      try {
+        // Create booking
+        await addDoc(collection(db, 'bookings'), {
+          student_id: profile.uid,
+          slot_id: slot.id,
+          booked_hours: slotHours,
+          student_name: profile.name,
+          course_name: slot.course_name,
+          exam_date: slot.exam_date,
+          observer_type: profile.observer_type || 'طالب دراسات',
+          createdAt: new Date().toISOString()
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, 'bookings');
+      } finally {
+        setActionLoading(null);
+      }
+    };
+
+    if (totalBookedHours + slotHours > requiredHours) {
+      showAlert(
+        'تنويه تجاوز الساعات',
+        'تنويه: عدد ساعات هذه المادة يتجاوز نصابك المتبقي. يسمح لك بحجزها استثنائياً كونها المادة الأخيرة لإغلاق نصابك الساعي بنجاح.',
+        'warning',
+        proceedWithBooking
+      );
+    } else {
+      await proceedWithBooking();
     }
   };
 
   const handleCancel = async (slotId: string) => {
     if (!isRegistrationActive()) {
-      alert('عذراً، فترة التسجيل مغلقة حالياً. لا يمكنك إلغاء الحجز.');
+      showAlert('فترة التسجيل مغلقة', 'عذراً، فترة التسجيل مغلقة حالياً. لا يمكنك إلغاء الحجز.', 'error');
       return;
     }
 
@@ -401,6 +441,71 @@ export default function BookingPage() {
               </section>
             );
           })}
+        </div>
+      )}
+
+      {/* Custom Alert/Warning Modal */}
+      {alertModal.isOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200 text-right" dir="rtl">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100 flex flex-col">
+            <div className="p-6 pb-4 flex items-center gap-3 border-b border-slate-50 bg-slate-50/50 flex-row-reverse justify-end">
+              {alertModal.type === 'error' && (
+                <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center text-red-600 shrink-0">
+                  <XCircle size={22} />
+                </div>
+              )}
+              {alertModal.type === 'warning' && (
+                <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
+                  <AlertCircle size={22} />
+                </div>
+              )}
+              {alertModal.type === 'success' && (
+                <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+                  <CheckCircle2 size={22} />
+                </div>
+              )}
+              {alertModal.type === 'info' && (
+                <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
+                  <Info size={22} />
+                </div>
+              )}
+              <h3 className="text-lg font-bold text-slate-900">{alertModal.title}</h3>
+            </div>
+            
+            <div className="p-6">
+              <p className="text-slate-600 leading-relaxed text-sm whitespace-pre-line text-right">{alertModal.message}</p>
+            </div>
+            
+            <div className="p-6 pt-0 flex gap-3">
+              {alertModal.onConfirm ? (
+                <>
+                  <button
+                    onClick={() => {
+                      const confirmCallback = alertModal.onConfirm;
+                      setAlertModal(prev => ({ ...prev, isOpen: false }));
+                      if (confirmCallback) confirmCallback();
+                    }}
+                    className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors"
+                  >
+                    تأكيد الحجز
+                  </button>
+                  <button
+                    onClick={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
+                    className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+                  >
+                    تراجع
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
+                  className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors"
+                >
+                  حسناً
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
