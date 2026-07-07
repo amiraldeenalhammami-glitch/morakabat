@@ -32,7 +32,7 @@ export default function Login() {
 
       navigate('/');
     } catch (err: any) {
-      console.error('Full Login Error:', err);
+      console.warn('Login Error:', err.message || err);
       const errorCode = err.code || '';
       const errorMessage = err.message || '';
       

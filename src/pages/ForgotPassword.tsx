@@ -23,7 +23,7 @@ export default function ForgotPassword() {
       setSuccess('تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني. يرجى التحقق من صندوق الوارد (والرسائل غير المرغوب فيها).');
       setTimeout(() => navigate('/login'), 5000);
     } catch (err: any) {
-      console.error('Reset password error:', err);
+      console.warn('Reset password error:', err.message || err);
       if (err.code === 'auth/user-not-found') {
         setError('البريد الإلكتروني غير مسجل في النظام');
       } else if (err.code === 'auth/invalid-email') {

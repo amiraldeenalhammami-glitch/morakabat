@@ -363,11 +363,37 @@ export default function AdminSlots() {
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const text = event.target?.result as string;
-        if (!text) {
+        const arrayBuffer = event.target?.result as ArrayBuffer;
+        if (!arrayBuffer || arrayBuffer.byteLength === 0) {
           setImportError('الملف فارغ أو غير صالح');
           return;
         }
+
+        let text = '';
+        
+        // Try decoding with UTF-8 first (fatal: true will throw on invalid sequences like CP1256 Arabic)
+        try {
+          const decoder = new TextDecoder('utf-8', { fatal: true });
+          text = decoder.decode(arrayBuffer);
+        } catch (utf8Error) {
+          console.warn('UTF-8 decoding failed, trying windows-1256 (Arabic/Excel compatibility)...', utf8Error);
+          // Fallback to Windows-1256 which is the standard ANSI codepage for Arabic exports in Excel
+          try {
+            const decoder = new TextDecoder('windows-1256');
+            text = decoder.decode(arrayBuffer);
+          } catch (winError) {
+            console.error('Windows-1256 decoding failed, falling back to non-fatal UTF-8...', winError);
+            // Final fallback: non-fatal UTF-8
+            const decoder = new TextDecoder('utf-8');
+            text = decoder.decode(arrayBuffer);
+          }
+        }
+
+        if (!text.trim()) {
+          setImportError('لم نتمكن من قراءة محتوى الملف بشكل صحيح.');
+          return;
+        }
+
         const parsed = parseCSVToSlots(text);
         if (parsed.length === 0) {
           setImportError('لم يتم العثور على أي مواد صالحة في الملف. يرجى التحقق من وجود الأعمدة المطلوبة: اسم المادة، السنة الدراسية، تاريخ المادة، وقت البدء.');
@@ -382,7 +408,7 @@ export default function AdminSlots() {
         console.error(err);
       }
     };
-    reader.readAsText(file, 'UTF-8');
+    reader.readAsArrayBuffer(file);
   };
 
   const handleImportSlots = async () => {
@@ -1190,8 +1216,8 @@ export default function AdminSlots() {
                     type="number"
                     required
                     min="1"
-                    value={formData.required_invigilators}
-                    onChange={(e) => setFormData({ ...formData, required_invigilators: parseInt(e.target.value) })}
+                    value={isNaN(formData.required_invigilators) ? 2 : formData.required_invigilators}
+                    onChange={(e) => setFormData({ ...formData, required_invigilators: parseInt(e.target.value) || 0 })}
                     className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
                   />
                 </div>

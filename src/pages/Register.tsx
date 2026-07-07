@@ -93,7 +93,7 @@ export default function Register() {
       setSuccess('تم إنشاء الحساب بنجاح! تم إرسال رابط التحقق إلى بريدك الإلكتروني. يرجى تفعيل الحساب قبل تسجيل الدخول.');
       setTimeout(() => navigate('/login'), 6000);
     } catch (err: any) {
-      console.error('Registration error details:', err);
+      console.warn('Registration error details:', err.message || err);
       const errorCode = err.code || '';
       const errorMessage = err.message || '';
       const fullError = (typeof err === 'string' ? err : (errorMessage + ' ' + errorCode)).toLowerCase();

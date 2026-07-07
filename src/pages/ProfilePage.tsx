@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { User, Mail, Phone, IdCard, Building, Clock, Shield, Edit2, Save, X, Loader2, Camera, Image as ImageIcon, CheckCircle2, MessageSquare, XCircle } from 'lucide-react';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { AppSettings } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
@@ -33,17 +33,15 @@ export default function ProfilePage() {
   }, [profile, isEditing]);
 
   useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const docSnap = await getDoc(doc(db, 'settings', 'global'));
-        if (docSnap.exists()) {
-          setGlobalSettings(docSnap.data() as AppSettings);
-        }
-      } catch (error) {
-        handleFirestoreError(error, OperationType.GET, 'settings/global');
+    const unsubscribeSettings = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
+      if (docSnap.exists()) {
+        setGlobalSettings(docSnap.data() as AppSettings);
       }
-    };
-    fetchSettings();
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/global');
+    });
+
+    return () => unsubscribeSettings();
   }, []);
 
   if (!profile || !user) return null;
@@ -77,7 +75,9 @@ export default function ProfilePage() {
     }
   };
 
-  const requiredHours = profile.required_hours || globalSettings?.default_required_hours || 16;
+  const requiredHours = profile.required_hours_mode === 'manual' 
+    ? (profile.required_hours || 16) 
+    : (globalSettings?.default_required_hours || 16);
 
   const infoItems = [
     { label: 'الاسم الكامل', value: profile.name, icon: User, key: 'name' },

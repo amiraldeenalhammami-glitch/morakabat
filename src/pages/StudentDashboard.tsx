@@ -18,25 +18,23 @@ export default function StudentDashboard() {
   useEffect(() => {
     if (!profile?.uid) return;
 
-    const fetchSettings = async () => {
-      try {
-        const docSnap = await getDoc(doc(db, 'settings', 'global'));
-        if (docSnap.exists()) {
-          const data = docSnap.data() as AppSettings;
-          setGlobalSettings({
-            registration_open: data.registration_open ?? true,
-            registration_start: data.registration_start ?? '',
-            registration_end: data.registration_end ?? '',
-            exam_start: data.exam_start ?? '',
-            exam_end: data.exam_end ?? '',
-            default_required_hours: data.default_required_hours ?? 16,
-          });
-        }
-      } catch (error) {
-        handleFirestoreError(error, OperationType.GET, 'settings/global');
+    const unsubscribeSettings = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as AppSettings;
+        setGlobalSettings({
+          registration_open: data.registration_open ?? true,
+          registration_start: data.registration_start ?? '',
+          registration_end: data.registration_end ?? '',
+          exam_start: data.exam_start ?? '',
+          exam_end: data.exam_end ?? '',
+          default_required_hours: data.default_required_hours ?? 16,
+        });
       }
-    };
-    fetchSettings();
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/global');
+    });
+
+    return () => unsubscribeSettings();
   }, [profile?.uid]);
 
   useEffect(() => {
@@ -85,7 +83,7 @@ export default function StudentDashboard() {
   }, [profile?.uid, profile?.status]);
 
   const totalBookedHours = bookings.reduce((acc, curr) => acc + Math.abs(Number(curr.booked_hours || 0)), 0);
-  const requiredHours = Number(profile?.required_hours || globalSettings?.default_required_hours || 16);
+  const requiredHours = Number(profile?.required_hours_mode === 'manual' ? (profile?.required_hours ?? 16) : (globalSettings?.default_required_hours ?? 16));
   const remainingHours = Math.max(0, requiredHours - totalBookedHours);
   const progress = Math.min(100, (totalBookedHours / requiredHours) * 100);
 

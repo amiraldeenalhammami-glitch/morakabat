@@ -70,7 +70,7 @@ export default function AdminStudents() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [editingHours, setEditingHours] = useState<{ uid: string, hours: number } | null>(null);
+  const [editingHours, setEditingHours] = useState<{ uid: string, hours: number, mode: 'default' | 'manual' } | null>(null);
   const [globalSettings, setGlobalSettings] = useState<AppSettings | null>(null);
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
   const [updatingBooking, setUpdatingBooking] = useState<string | null>(null);
@@ -125,25 +125,23 @@ export default function AdminStudents() {
   useEffect(() => {
     if (!profile?.uid) return;
 
-    const fetchSettings = async () => {
-      try {
-        const docSnap = await getDoc(doc(db, 'settings', 'global'));
-        if (docSnap.exists()) {
-          const data = docSnap.data() as AppSettings;
-          setGlobalSettings({
-            registration_open: data.registration_open ?? true,
-            registration_start: data.registration_start ?? '',
-            registration_end: data.registration_end ?? '',
-            exam_start: data.exam_start ?? '',
-            exam_end: data.exam_end ?? '',
-            default_required_hours: data.default_required_hours ?? 16,
-          });
-        }
-      } catch (error) {
-        handleFirestoreError(error, OperationType.GET, 'settings/global');
+    const unsubscribeSettings = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as AppSettings;
+        setGlobalSettings({
+          registration_open: data.registration_open ?? true,
+          registration_start: data.registration_start ?? '',
+          registration_end: data.registration_end ?? '',
+          exam_start: data.exam_start ?? '',
+          exam_end: data.exam_end ?? '',
+          default_required_hours: data.default_required_hours ?? 16,
+        });
       }
-    };
-    fetchSettings();
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/global');
+    });
+
+    return () => unsubscribeSettings();
   }, [profile?.uid]);
 
   useEffect(() => {
@@ -183,7 +181,7 @@ export default function AdminStudents() {
         s.email,
         s.phone || '',
         hours,
-        s.required_hours || globalSettings?.default_required_hours || 16
+        s.required_hours_mode === 'manual' ? (s.required_hours ?? 16) : (globalSettings?.default_required_hours ?? 16)
       ];
     });
 
@@ -235,7 +233,7 @@ export default function AdminStudents() {
       const attendedHours = attendedBookings.reduce((sum, b) => sum + Math.abs(Number(b.booked_hours || 0)), 0);
 
       // 5. الساعات المطلوبة منه
-      const requiredHours = Number(s.required_hours || globalSettings?.default_required_hours || 16);
+      const requiredHours = Number(s.required_hours_mode === 'manual' ? (s.required_hours ?? 16) : (globalSettings?.default_required_hours ?? 16));
 
       // 6. نسبة الإنجاز
       const achievementRate = requiredHours > 0 ? `${Math.round((attendedHours / requiredHours) * 100)}%` : '0%';
@@ -310,7 +308,8 @@ export default function AdminStudents() {
     if (!editingHours) return;
     try {
       await updateDoc(doc(db, 'users', editingHours.uid), {
-        required_hours: editingHours.hours
+        required_hours: editingHours.hours,
+        required_hours_mode: editingHours.mode
       });
       setEditingHours(null);
     } catch (err) {
@@ -340,6 +339,54 @@ export default function AdminStudents() {
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `users/${student.uid}`);
+    } finally {
+      setUpdatingStatus(null);
+    }
+  };
+
+  const handleBulkActivatePending = async () => {
+    const pendingList = students.filter(s => s.status === 'pending' || !s.status);
+    if (pendingList.length === 0) {
+      alert('لا توجد طلبات معلقة لتفعيلها.');
+      return;
+    }
+
+    const finalToActivate = pendingList.filter(student => {
+      if (student.requested_role === 'admin' && !isSuperAdmin) {
+        return false;
+      }
+      return true;
+    });
+
+    if (finalToActivate.length === 0) {
+      alert('لا توجد طلبات معلقة يمكنك تفعيلها (طلبات المدراء تتطلب حساب سوبر أدمن).');
+      return;
+    }
+
+    const adminsToApprove = finalToActivate.filter(s => s.requested_role === 'admin');
+    if (adminsToApprove.length > 0) {
+      const currentAdminsCount = allUsers.filter(u => u.role === 'admin' || u.email === "amiraldeenalhammami@ab3adacademy.com").length;
+      if (currentAdminsCount + adminsToApprove.length > 5) {
+        alert('لا يمكن تجاوز الحد الأقصى وهو 5 مدراء. يرجى تفعيل طلبات المدراء يدوياً.');
+        return;
+      }
+    }
+
+    setUpdatingStatus('bulk_activating');
+    try {
+      const promises = finalToActivate.map(student => 
+        updateDoc(doc(db, 'users', student.uid), {
+          status: 'active',
+          role: student.requested_role === 'admin' ? 'admin' : 'student'
+        }).catch(err => {
+          handleFirestoreError(err, OperationType.UPDATE, `users/${student.uid}`);
+        })
+      );
+
+      await Promise.all(promises);
+      alert(`تم تفعيل جميع طلبات المراقبين بنجاح (إجمالي: ${finalToActivate.length} حساب).`);
+    } catch (err) {
+      console.error('Error in bulk activation:', err);
     } finally {
       setUpdatingStatus(null);
     }
@@ -488,7 +535,7 @@ export default function AdminStudents() {
         </button>
       </div>
 
-      <div className="flex flex-col md:flex-row gap-6 items-start">
+      <div className="flex flex-col md:flex-row gap-6 items-start md:items-end justify-between w-full">
         <div className="relative w-full md:max-w-md">
           <label className="block text-xs font-bold text-slate-500 mb-1 mr-2">البحث عن المراقبين</label>
           <div className="relative">
@@ -502,6 +549,25 @@ export default function AdminStudents() {
             />
           </div>
         </div>
+
+        {activeTab === 'pending' && students.filter(s => s.status === 'pending' || !s.status).length > 0 && (
+          <button
+            onClick={() => requestSecurityConfirm(
+              handleBulkActivatePending,
+              'تفعيل كافة المراقبين المعلقين دفعة واحدة',
+              `هل أنت متأكد من رغبتك في تفعيل كافة طلبات المراقبين المعلقة المتبقية في هذه القائمة دفعة واحدة؟ (إجمالي الطلبات: ${students.filter(s => s.status === 'pending' || !s.status).length})`
+            )}
+            disabled={updatingStatus !== null}
+            className="w-full md:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm shadow-emerald-100 disabled:opacity-50 shrink-0"
+          >
+            {updatingStatus === 'bulk_activating' ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <CheckCircle2 size={18} />
+            )}
+            <span>تفعيل كافة المراقبين المعلقين ({students.filter(s => s.status === 'pending' || !s.status).length})</span>
+          </button>
+        )}
       </div>
 
       {/* Group Notes System */}
@@ -602,7 +668,9 @@ export default function AdminStudents() {
             {filteredStudents.map((student) => {
               const currentStudentBookings = studentBookings.filter(b => b.student_id === student.uid);
               const studentHours = currentStudentBookings.reduce((acc, curr) => acc + curr.booked_hours, 0);
-              const required = student.required_hours || globalSettings?.default_required_hours || 16;
+              const required = student.required_hours_mode === 'manual' 
+                ? (student.required_hours ?? 16) 
+                : (globalSettings?.default_required_hours ?? 16);
               const isExpanded = expandedStudent === student.uid;
 
               return (
@@ -677,9 +745,20 @@ export default function AdminStudents() {
                           <div className="w-24 h-1.5 bg-slate-100 rounded-full mt-1 overflow-hidden">
                             <div className="h-full bg-indigo-600" style={{ width: `${Math.min(100, (studentHours/required)*100)}%` }} />
                           </div>
+                          <span className={`text-[9px] mt-1 font-bold px-1 py-0.5 rounded-md self-start ${
+                            student.required_hours_mode === 'manual' 
+                              ? 'bg-amber-50 text-amber-600 border border-amber-200' 
+                              : 'bg-slate-50 text-slate-500 border border-slate-200'
+                          }`}>
+                            {student.required_hours_mode === 'manual' ? 'يدوي' : 'افتراضي'}
+                          </span>
                         </div>
                         <button 
-                          onClick={() => setEditingHours({ uid: student.uid, hours: required })}
+                          onClick={() => setEditingHours({ 
+                            uid: student.uid, 
+                            hours: student.required_hours || globalSettings?.default_required_hours || 16, 
+                            mode: student.required_hours_mode || 'default' 
+                          })}
                           className="p-1 text-slate-400 hover:text-indigo-600"
                         >
                           <Edit2 size={14} />
@@ -886,22 +965,71 @@ export default function AdminStudents() {
 
       {/* Edit Hours Modal */}
       {editingHours && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6">
-            <h2 className="text-xl font-bold text-slate-900 mb-4">تعديل الساعات المطلوبة</h2>
-            <div className="space-y-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-sm rounded-3xl shadow-2xl p-6 border border-slate-100">
+            <h2 className="text-xl font-bold text-slate-900 mb-4 text-right">تعديل الساعات المطلوبة</h2>
+            <div className="space-y-4 text-right">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">عدد الساعات</label>
-                <input
-                  type="number"
-                  value={editingHours.hours}
-                  onChange={(e) => setEditingHours({ ...editingHours, hours: parseInt(e.target.value) })}
-                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
-                />
+                <label className="block text-xs font-bold text-slate-500 mb-1.5 mr-1">نظام تحديد الساعات</label>
+                <select
+                  value={editingHours.mode}
+                  onChange={(e) => {
+                    const newMode = e.target.value as 'default' | 'manual';
+                    setEditingHours({
+                      ...editingHours,
+                      mode: newMode,
+                      hours: newMode === 'default' 
+                        ? (globalSettings?.default_required_hours || 16) 
+                        : (editingHours.hours || globalSettings?.default_required_hours || 16)
+                    });
+                  }}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm font-medium"
+                >
+                  <option value="default">افتراضي - Default</option>
+                  <option value="manual">يدوي - Manual</option>
+                </select>
               </div>
-              <div className="flex gap-3">
-                <button onClick={handleUpdateHours} className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700">تحديث</button>
-                <button onClick={() => setEditingHours(null)} className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200">إلغاء</button>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5 mr-1">عدد الساعات المطلوبة</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    disabled={editingHours.mode === 'default'}
+                    value={
+                      editingHours.mode === 'default' 
+                        ? (globalSettings?.default_required_hours || 16) 
+                        : (isNaN(editingHours.hours) ? 0 : editingHours.hours)
+                    }
+                    onChange={(e) => setEditingHours({ ...editingHours, hours: parseInt(e.target.value) || 0 })}
+                    className={`w-full pl-12 pr-4 py-2.5 border rounded-xl outline-none text-sm font-semibold text-right ${
+                      editingHours.mode === 'default'
+                        ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 focus:ring-2 focus:ring-indigo-500'
+                    }`}
+                  />
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">ساعة</span>
+                </div>
+                {editingHours.mode === 'default' && (
+                  <p className="text-[11px] text-slate-400 mt-1.5 mr-1 leading-relaxed">
+                    يتم قفل الحقل ويأخذ القيمة تلقائياً من الإعدادات العامة ({globalSettings?.default_required_hours} ساعة).
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button 
+                  onClick={handleUpdateHours} 
+                  className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors"
+                >
+                  تحديث
+                </button>
+                <button 
+                  onClick={() => setEditingHours(null)} 
+                  className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+                >
+                  إلغاء
+                </button>
               </div>
             </div>
           </div>

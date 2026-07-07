@@ -1,13 +1,33 @@
 import { ExamSlot } from '../types';
 
+// Helper to convert Eastern Arabic numerals (٠١٢٣٤٥٦٧٨٩) to Western Arabic numerals (0123456789)
+export function convertArabicNumerals(str: string): string {
+  return str.replace(/[٠١٢٣٤٥٦٧٨٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
+}
+
+// Clean and normalize Arabic text for robust comparisons
+export function cleanArabicText(text: string): string {
+  return text
+    .replace(/^\uFEFF/, '') // Remove BOM
+    .trim()
+    .replace(/['"“”]+/g, '') // Remove quotes
+    .replace(/\s+/g, ' ') // Normalize multiple spaces to single space
+    .replace(/[أإآ]/g, 'ا') // Normalize Alif variants to plain Alif
+    .replace(/ة/g, 'ه') // Normalize Tehmorboota to Heh
+    .replace(/ى/g, 'ي') // Normalize Alef Maksoura to Yeh
+    .toLowerCase();
+}
+
 // Helper to parse Arabic year text into number
 function parseArabicYear(text: string): number {
-  const normalized = text.trim();
-  if (normalized.includes('الأولى') || normalized.includes('الاولى') || normalized === '1' || normalized.includes('الأول') || normalized.includes('الاول')) return 1;
-  if (normalized.includes('الثانية') || normalized.includes('الثانيه') || normalized === '2' || normalized.includes('الثاني')) return 2;
-  if (normalized.includes('الثالثة') || normalized.includes('الثالثه') || normalized === '3' || normalized.includes('الثالث')) return 3;
-  if (normalized.includes('الرابعة') || normalized.includes('الرابعه') || normalized === '4' || normalized.includes('الرابع')) return 4;
-  if (normalized.includes('الخامسة') || normalized.includes('الخامسه') || normalized === '5' || normalized.includes('الخامس')) return 5;
+  const converted = convertArabicNumerals(text.trim());
+  const normalized = cleanArabicText(converted);
+  
+  if (normalized.includes('الاولي') || normalized.includes('الاول') || normalized === '1') return 1;
+  if (normalized.includes('الثانيه') || normalized.includes('الثاني') || normalized === '2') return 2;
+  if (normalized.includes('الثالثه') || normalized.includes('الثالث') || normalized === '3') return 3;
+  if (normalized.includes('الرابعه') || normalized.includes('الرابع') || normalized === '4') return 4;
+  if (normalized.includes('الخامسه') || normalized.includes('الخامس') || normalized === '5') return 5;
   
   const num = parseInt(normalized);
   if (!isNaN(num) && num >= 1 && num <= 5) return num;
@@ -16,9 +36,10 @@ function parseArabicYear(text: string): number {
 
 // Helper to format time to HH:MM
 function formatTime(timeStr: string): string {
-  let cleaned = timeStr.trim().toLowerCase();
+  const converted = convertArabicNumerals(timeStr.trim().toLowerCase());
+  let cleaned = converted;
   
-  // Handle AM/PM
+  // Handle AM/PM and Arabic equivalents (ص/م)
   const isPM = cleaned.includes('pm') || cleaned.includes('م');
   const isAM = cleaned.includes('am') || cleaned.includes('ص');
   
@@ -42,45 +63,44 @@ function formatTime(timeStr: string): string {
   return `${formattedHours}:${formattedMinutes}`;
 }
 
-// Helper to calculate end time (2 hours after start_time)
-function calculateEndTime(startTimeStr: string): string {
-  const parts = startTimeStr.split(':');
-  let hours = parseInt(parts[0]) || 9;
-  let minutes = parseInt(parts[1]) || 0;
-  
-  hours = (hours + 2) % 24;
-  
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-}
-
 // Helper to format date to YYYY-MM-DD
 function formatDate(dateStr: string): string {
-  let cleaned = dateStr.trim();
-  // Replace slashes with dashes
-  cleaned = cleaned.replace(/\//g, '-');
+  let cleaned = convertArabicNumerals(dateStr.trim());
+  // Replace slashes or spaces with dashes
+  cleaned = cleaned.replace(/[\/\s]/g, '-');
   
   // Check if already in YYYY-MM-DD
   const regex = /^\d{4}-\d{2}-\d{2}$/;
   if (regex.test(cleaned)) return cleaned;
   
-  // Try to parse parts
-  const parts = cleaned.split('-');
+  const parts = cleaned.split('-').map(p => p.trim());
   if (parts.length === 3) {
-    let year = parts[0];
-    let month = parts[1];
-    let day = parts[2];
+    let part1 = parts[0];
+    let part2 = parts[1];
+    let part3 = parts[2];
     
-    // Check if day and year are swapped
-    if (year.length <= 2 && day.length === 4) {
-      const temp = year;
-      year = day;
-      day = temp;
+    // Check if it is DD-MM-YYYY
+    if (part3.length === 4 && part1.length <= 2) {
+      return `${part3}-${part2.padStart(2, '0')}-${part1.padStart(2, '0')}`;
     }
-    
-    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    // Check if it is YYYY-MM-DD
+    if (part1.length === 4 && part3.length <= 2) {
+      return `${part1}-${part2.padStart(2, '0')}-${part3.padStart(2, '0')}`;
+    }
   }
   
-  return cleaned; // Return as-is if parsing fails
+  // Try fallback JavaScript parsing
+  try {
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+  } catch (e) {}
+
+  return cleaned; // Return original cleaned value as-is if parsing fails
 }
 
 export interface ParsedSlotInput {
@@ -95,18 +115,18 @@ export interface ParsedSlotInput {
 
 // Helper to parse duration text into number of hours
 function parseDuration(text: string): number {
-  const normalized = text.trim().toLowerCase();
+  const converted = convertArabicNumerals(text.trim().toLowerCase());
+  const normalized = cleanArabicText(converted);
   if (!normalized) return 2; // Default to 2 hours
   
-  if (normalized.includes('ساعتين') || normalized.includes('ساعتان') || normalized === '2' || normalized.includes('ساعتان')) return 2;
-  if (normalized.includes('ساعة') || normalized.includes('ساعه') || normalized === '1' || normalized.includes('ساعة واحدة') || normalized.includes('ساعه واحده')) return 1;
-  if (normalized.includes('ثلاث') || normalized.includes('3') || normalized.includes('ثلاثة') || normalized.includes('ثلاثه')) return 3;
-  if (normalized.includes('اربع') || normalized.includes('أربع') || normalized.includes('4') || normalized.includes('أربعة') || normalized.includes('اربعه')) return 4;
-  if (normalized.includes('خمس') || normalized.includes('5') || normalized.includes('خمسة') || normalized.includes('خمسه')) return 5;
+  if (normalized.includes('ساعتين') || normalized.includes('ساعتان') || normalized === '2') return 2;
+  if (normalized.includes('ساعه واحده') || normalized.includes('ساعة واحدة') || normalized.includes('ساعه') || normalized.includes('ساعة') || normalized === '1') return 1;
+  if (normalized.includes('ثلاث') || normalized === '3') return 3;
+  if (normalized.includes('اربع') || normalized === '4') return 4;
+  if (normalized.includes('خمس') || normalized === '5') return 5;
   
   // Extract digits
-  const clean = normalized.replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
-  const match = clean.match(/\d+(\.\d+)?/);
+  const match = normalized.match(/\d+(\.\d+)?/);
   if (match) {
     const val = parseFloat(match[0]);
     if (!isNaN(val) && val > 0 && val <= 24) return val;
@@ -128,18 +148,197 @@ function calculateEndTimeWithDuration(startTimeStr: string, duration: number): s
   return `${String(endHours).padStart(2, '0')}:${String(endMinutes).padStart(2, '0')}`;
 }
 
-export function parseCSVToSlots(csvContent: string): ParsedSlotInput[] {
-  // Support both commas and semicolons as delimiters, and replace \r
-  const lines = csvContent.replace(/\r/g, '\n').split('\n').map(l => l.trim()).filter(l => l.length > 0);
-  if (lines.length < 2) return [];
+// Content-based detector to identify column indices dynamically from data rows (acts as a backup/validation)
+function detectColumnIndicesByContent(lines: string[], delimiter: string): {
+  courseIdx: number;
+  yearIdx: number;
+  dateIdx: number;
+  timeIdx: number;
+  durationIdx: number;
+} {
+  const numLinesToAnalyze = Math.min(lines.length, 10);
+  if (numLinesToAnalyze <= 1) {
+    return { courseIdx: 0, yearIdx: 1, dateIdx: 2, timeIdx: 3, durationIdx: 4 };
+  }
 
-  // Parse first line (header) to map columns
-  // Super robust regex to parse CSV line preserving quoted values
+  // Split lines using double quotes aware splitter
   const splitCSVLine = (line: string): string[] => {
     const result: string[] = [];
     let current = '';
     let inQuotes = false;
-    const delimiter = line.includes(';') ? ';' : ',';
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === delimiter && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  };
+
+  let maxCols = 0;
+  const parsedRows: string[][] = [];
+  for (let i = 1; i < numLinesToAnalyze; i++) {
+    const cols = splitCSVLine(lines[i]);
+    parsedRows.push(cols);
+    if (cols.length > maxCols) maxCols = cols.length;
+  }
+
+  const scores = Array.from({ length: maxCols }, () => ({
+    date: 0,
+    year: 0,
+    time: 0,
+    duration: 0,
+    text: 0
+  }));
+
+  parsedRows.forEach((cols) => {
+    cols.forEach((cell, idx) => {
+      const val = cell.trim();
+      if (!val) return;
+
+      const converted = convertArabicNumerals(val);
+      const cleaned = cleanArabicText(val);
+
+      // 1. Check for date patterns
+      const isDate = /\d{1,2}[-/]\d{1,2}[-/]\d{2,4}/.test(converted) || /\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(converted);
+      if (isDate) {
+        scores[idx].date += 15;
+        return;
+      }
+
+      // 2. Check for academic year
+      const isYearWord = cleaned.includes('الاولي') || cleaned.includes('الاول') || cleaned.includes('الثانيه') || cleaned.includes('الثاني') || cleaned.includes('الثالثه') || cleaned.includes('الثالث') || cleaned.includes('الرابعه') || cleaned.includes('الرابع') || cleaned.includes('الخامسه') || cleaned.includes('الخامس') || cleaned.includes('صف') || cleaned.includes('مستوي');
+      const isYearNum = /^[1-5]$/.test(converted);
+      if (isYearWord) {
+        scores[idx].year += 15;
+      } else if (isYearNum) {
+        scores[idx].year += 4;
+      }
+
+      // 3. Check for exam duration indicators
+      const isDurationWord = cleaned.includes('ساعه') || cleaned.includes('ساعة') || cleaned.includes('ساعتين') || cleaned.includes('ساعتان') || cleaned.includes('ساعات');
+      if (isDurationWord) {
+        scores[idx].duration += 15;
+      }
+
+      // 4. Distinction between start hours (usually >= 8 and <= 18) and duration (usually <= 5)
+      const parsedNum = parseInt(converted);
+      if (!isNaN(parsedNum)) {
+        if (parsedNum >= 8 && parsedNum <= 20) {
+          scores[idx].time += 8;
+        } else if (parsedNum > 0 && parsedNum <= 5) {
+          scores[idx].duration += 5;
+        }
+      } else if (converted.includes(':')) {
+        scores[idx].time += 15;
+      }
+
+      // 5. Course name (long text containing Arabic characters, non-numeric, not a short year/duration)
+      if (isNaN(parsedNum) && !isDate && !isYearWord && !isDurationWord && val.length > 2) {
+        scores[idx].text += 10;
+      }
+    });
+  });
+
+  let dateIdx = -1;
+  let yearIdx = -1;
+  let timeIdx = -1;
+  let durationIdx = -1;
+  let courseIdx = -1;
+
+  // Resolve indices using priority
+  // Date is the most unique
+  let maxDateScore = 0;
+  for (let idx = 0; idx < maxCols; idx++) {
+    if (scores[idx].date > maxDateScore) {
+      maxDateScore = scores[idx].date;
+      dateIdx = idx;
+    }
+  }
+
+  // Year is highly distinct
+  let maxYearScore = 0;
+  for (let idx = 0; idx < maxCols; idx++) {
+    if (idx === dateIdx) continue;
+    if (scores[idx].year > maxYearScore) {
+      maxYearScore = scores[idx].year;
+      yearIdx = idx;
+    }
+  }
+
+  // Duration
+  let maxDurationScore = 0;
+  for (let idx = 0; idx < maxCols; idx++) {
+    if (idx === dateIdx || idx === yearIdx) continue;
+    if (scores[idx].duration > maxDurationScore) {
+      maxDurationScore = scores[idx].duration;
+      durationIdx = idx;
+    }
+  }
+
+  // Start Time
+  let maxTimeScore = 0;
+  for (let idx = 0; idx < maxCols; idx++) {
+    if (idx === dateIdx || idx === yearIdx || idx === durationIdx) continue;
+    if (scores[idx].time > maxTimeScore) {
+      maxTimeScore = scores[idx].time;
+      timeIdx = idx;
+    }
+  }
+
+  // Course Name
+  let maxTextScore = 0;
+  for (let idx = 0; idx < maxCols; idx++) {
+    if (idx === dateIdx || idx === yearIdx || idx === durationIdx || idx === timeIdx) continue;
+    if (scores[idx].text > maxTextScore) {
+      maxTextScore = scores[idx].text;
+      courseIdx = idx;
+    }
+  }
+
+  // Fill in any gaps from remaining columns
+  const assigned = [courseIdx, yearIdx, dateIdx, timeIdx, durationIdx];
+  const getUnassigned = () => {
+    for (let i = 0; i < maxCols; i++) {
+      if (!assigned.includes(i)) return i;
+    }
+    return -1;
+  };
+
+  if (courseIdx === -1) { courseIdx = getUnassigned(); assigned[0] = courseIdx; }
+  if (yearIdx === -1) { yearIdx = getUnassigned(); assigned[1] = yearIdx; }
+  if (dateIdx === -1) { dateIdx = getUnassigned(); assigned[2] = dateIdx; }
+  if (timeIdx === -1) { timeIdx = getUnassigned(); assigned[3] = timeIdx; }
+  if (durationIdx === -1) { durationIdx = getUnassigned(); assigned[4] = durationIdx; }
+
+  // Absolute default fallbacks if still unassigned
+  if (courseIdx === -1) courseIdx = 0;
+  if (yearIdx === -1) yearIdx = 1;
+  if (dateIdx === -1) dateIdx = 2;
+  if (timeIdx === -1) timeIdx = 3;
+  if (durationIdx === -1) durationIdx = 4;
+
+  return { courseIdx, yearIdx, dateIdx, timeIdx, durationIdx };
+}
+
+export function parseCSVToSlots(csvContent: string): ParsedSlotInput[] {
+  const lines = csvContent.replace(/\r/g, '\n').split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  if (lines.length < 2) return [];
+
+  // Determine delimiter
+  const delimiter = lines[0].includes(';') ? ';' : ',';
+
+  // Parser to split CSV lines, honoring double quotes
+  const splitCSVLine = (line: string): string[] => {
+    const result: string[] = [];
+    let current = '';
+    let inQuotes = false;
     
     for (let i = 0; i < line.length; i++) {
       const char = line[i];
@@ -158,7 +357,7 @@ export function parseCSVToSlots(csvContent: string): ParsedSlotInput[] {
 
   const headers = splitCSVLine(lines[0]);
   
-  // Find column indices based on header names
+  // 1. Attempt Header-based Mapping
   let courseIdx = -1;
   let yearIdx = -1;
   let dateIdx = -1;
@@ -166,26 +365,82 @@ export function parseCSVToSlots(csvContent: string): ParsedSlotInput[] {
   let durationIdx = -1;
 
   headers.forEach((h, idx) => {
-    const normalized = h.toLowerCase();
-    if (normalized.includes('اسم المادة') || normalized.includes('المادة') || normalized.includes('اسم ماده') || normalized.includes('الماده') || normalized.includes('course')) {
-      courseIdx = idx;
-    } else if (normalized.includes('السنة الدراسية') || normalized.includes('السنة') || normalized.includes('السنه') || normalized.includes('academic') || normalized.includes('year')) {
-      yearIdx = idx;
-    } else if (normalized.includes('تاريخ المادة') || normalized.includes('تاريخ') || normalized.includes('date')) {
+    const cleaned = cleanArabicText(h);
+    
+    // 1. Check for Date first, to prevent "تاريخ المادة" matching "المادة" / "اسم المادة"
+    if (
+      cleaned.includes('تاريخ') || 
+      cleaned.includes('التاريخ') || 
+      cleaned.includes('date')
+    ) {
       dateIdx = idx;
-    } else if (normalized.includes('وقت البدء') || normalized.includes('وقت المباشرة') || normalized.includes('البدء') || normalized.includes('الوقت') || normalized.includes('time') || normalized.includes('start')) {
+    } 
+    // 2. Check for Time / Start Time
+    else if (
+      cleaned.includes('وقت البدء') || 
+      cleaned.includes('وقت المباشره') || 
+      cleaned.includes('البدء') || 
+      cleaned.includes('المباشره') || 
+      cleaned.includes('المباشرة') || 
+      cleaned.includes('الوقت') || 
+      cleaned.includes('ساعه البدء') || 
+      cleaned.includes('ساعة البدء') || 
+      cleaned.includes('time') || 
+      cleaned.includes('start')
+    ) {
       timeIdx = idx;
-    } else if (normalized.includes('مدة الامتحان') || normalized.includes('المدة') || normalized.includes('مدة') || normalized.includes('مده') || normalized.includes('duration') || normalized.includes('ساعات')) {
+    } 
+    // 3. Check for Duration
+    else if (
+      cleaned.includes('مده الامتحان') || 
+      cleaned.includes('مدة الامتحان') || 
+      cleaned.includes('المده') || 
+      cleaned.includes('المدة') || 
+      cleaned.includes('مده') || 
+      cleaned.includes('مدة') || 
+      cleaned.includes('duration') || 
+      cleaned.includes('ساعات') || 
+      cleaned.includes('ساعات الامتحان')
+    ) {
       durationIdx = idx;
+    } 
+    // 4. Check for Academic Year
+    else if (
+      cleaned.includes('السنه الدراسيه') || 
+      cleaned.includes('السنة الدراسية') || 
+      cleaned.includes('السنه') || 
+      cleaned.includes('السنة') || 
+      cleaned.includes('academic') || 
+      cleaned.includes('year') || 
+      cleaned.includes('صف') || 
+      cleaned.includes('مستوي') || 
+      cleaned.includes('المستوى')
+    ) {
+      yearIdx = idx;
+    } 
+    // 5. Finally, check for Course Name (now safe from matching "تاريخ المادة")
+    else if (
+      cleaned.includes('اسم الماده') || 
+      cleaned.includes('اسم المادة') || 
+      cleaned.includes('الماده') || 
+      cleaned.includes('المادة') || 
+      cleaned.includes('course') || 
+      cleaned.includes('subject')
+    ) {
+      courseIdx = idx;
     }
   });
 
-  // Fallbacks if headers are not matched exactly, try positional matching
-  if (courseIdx === -1) courseIdx = 0;
-  if (yearIdx === -1) yearIdx = 1 < headers.length ? 1 : -1;
-  if (dateIdx === -1) dateIdx = 2 < headers.length ? 2 : -1;
-  if (timeIdx === -1) timeIdx = 3 < headers.length ? 3 : -1;
-  if (durationIdx === -1) durationIdx = 4 < headers.length ? 4 : -1;
+  // 2. If any of the index mappings failed, trigger Content-based fallback auto-detection
+  if (courseIdx === -1 || yearIdx === -1 || dateIdx === -1 || timeIdx === -1 || durationIdx === -1) {
+    console.log('Some headers were not matched exactly. Utilizing smart content-based auto-detection...');
+    const detected = detectColumnIndicesByContent(lines, delimiter);
+    if (courseIdx === -1) courseIdx = detected.courseIdx;
+    if (yearIdx === -1) yearIdx = detected.yearIdx;
+    if (dateIdx === -1) dateIdx = detected.dateIdx;
+    if (timeIdx === -1) timeIdx = detected.timeIdx;
+    if (durationIdx === -1) durationIdx = detected.durationIdx;
+  }
 
   const results: ParsedSlotInput[] = [];
 
@@ -193,8 +448,8 @@ export function parseCSVToSlots(csvContent: string): ParsedSlotInput[] {
     const cols = splitCSVLine(lines[i]);
     if (cols.length === 0 || !cols[0]) continue;
 
-    const course_name = courseIdx !== -1 && cols[courseIdx] ? cols[courseIdx] : '';
-    if (!course_name) continue; // Skip lines without course name
+    const course_name = courseIdx !== -1 && cols[courseIdx] ? cols[courseIdx].replace(/['"“”]+/g, '').trim() : '';
+    if (!course_name) continue; // Skip lines without a valid course name
 
     const yearText = yearIdx !== -1 && cols[yearIdx] ? cols[yearIdx] : '1';
     const academic_year = parseArabicYear(yearText);
@@ -210,7 +465,7 @@ export function parseCSVToSlots(csvContent: string): ParsedSlotInput[] {
     
     const end_time = calculateEndTimeWithDuration(start_time, duration_hours);
 
-    // If start_time is before 12:00, morning, else evening
+    // Morning session if starting before 12:00, otherwise evening
     const startHour = parseInt(start_time.split(':')[0]) || 9;
     const session_type: 'morning' | 'evening' = startHour < 12 ? 'morning' : 'evening';
 

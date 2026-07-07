@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, query, getDocs, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { ExamSlot, Booking, UserProfile } from '../types';
+import { ExamSlot, Booking, UserProfile, AppSettings } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
 import { Users, Calendar, Clock, CheckCircle, ArrowRight, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -13,6 +13,7 @@ export default function AdminDashboard() {
   const [slots, setSlots] = useState<ExamSlot[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [students, setStudents] = useState<UserProfile[]>([]);
+  const [globalSettings, setGlobalSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const { canInstall, installApp } = usePWA();
 
@@ -41,10 +42,19 @@ export default function AdminDashboard() {
       handleFirestoreError(error, OperationType.GET, 'users');
     });
 
+    const unsubscribeSettings = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
+      if (docSnap.exists()) {
+        setGlobalSettings(docSnap.data() as AppSettings);
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/global');
+    });
+
     return () => {
       unsubscribeSlots();
       unsubscribeBookings();
       unsubscribeStudents();
+      unsubscribeSettings();
     };
   }, [profile?.uid]);
 
@@ -185,7 +195,9 @@ export default function AdminDashboard() {
               const studentHours = studentBookings
                 .filter(b => b.student_id === student.uid)
                 .reduce((acc, curr) => acc + curr.booked_hours, 0);
-              const required = student.required_hours || 16;
+              const required = student.required_hours_mode === 'manual' 
+                ? (student.required_hours ?? 16) 
+                : (globalSettings?.default_required_hours ?? 16);
               const progress = Math.min(100, (studentHours / required) * 100);
 
               return (

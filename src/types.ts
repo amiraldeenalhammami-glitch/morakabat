@@ -12,6 +12,7 @@ export interface UserProfile {
   requested_role?: UserRole;
   avatar_emoji?: string;
   required_hours?: number;
+  required_hours_mode?: 'default' | 'manual';
   status?: 'pending' | 'active' | 'frozen';
   admin_note?: string;
   student_note?: string;

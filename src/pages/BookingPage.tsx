@@ -124,7 +124,7 @@ export default function BookingPage() {
     }
 
     const totalBookedHours = myBookings.reduce((acc, curr) => acc + Math.abs(Number(curr.booked_hours || 0)), 0);
-    const requiredHours = Number(profile.required_hours || globalSettings?.default_required_hours || 16);
+    const requiredHours = Number(profile.required_hours_mode === 'manual' ? (profile.required_hours ?? 16) : (globalSettings?.default_required_hours ?? 16));
     
     let slotHours = 2;
     if (slot.duration_hours !== undefined) {
