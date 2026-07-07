@@ -2,14 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { collection, query, where, onSnapshot, doc, getDoc, updateDoc, orderBy, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { Booking, AppSettings, GroupNote } from '../types';
+import { Booking, AppSettings, GroupNote, ExamSlot } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
-import { Clock, CheckCircle, AlertCircle, Calendar as CalendarIcon, MessageSquare, CheckCircle2, XCircle, Download, Bell } from 'lucide-react';
+import { Clock, CheckCircle, AlertCircle, Calendar as CalendarIcon, MessageSquare, CheckCircle2, XCircle, Download, Bell, MapPin } from 'lucide-react';
 import { usePWA } from '../hooks/usePWA';
+import { getSlotRooms, getObserverRoom } from '../utils/roomUtils';
 
 export default function StudentDashboard() {
   const { profile, user } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [allBookings, setAllBookings] = useState<Booking[]>([]);
+  const [slots, setSlots] = useState<ExamSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [globalSettings, setGlobalSettings] = useState<AppSettings | null>(null);
   const [currentNote, setCurrentNote] = useState<GroupNote | null>(null);
@@ -49,7 +52,25 @@ export default function StudentDashboard() {
       handleFirestoreError(error, OperationType.GET, 'bookings');
     });
 
-    return () => unsubscribe();
+    const unsubscribeSlots = onSnapshot(collection(db, 'exam_slots'), (snapshot) => {
+      const slotsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExamSlot));
+      setSlots(slotsData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'exam_slots');
+    });
+
+    const unsubscribeAllBookings = onSnapshot(collection(db, 'bookings'), (snapshot) => {
+      const bookingsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Booking));
+      setAllBookings(bookingsData);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'bookings');
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeSlots();
+      unsubscribeAllBookings();
+    };
   }, [profile?.uid]);
 
   useEffect(() => {
@@ -322,40 +343,59 @@ export default function StudentDashboard() {
                   <tr className="bg-slate-50 text-slate-500 text-sm">
                     <th className="px-6 py-4 font-medium">المادة</th>
                     <th className="px-6 py-4 font-medium">التاريخ</th>
-                    <th className="px-6 py-4 font-medium">الساعات</th>
+                    <th className="px-6 py-4 font-medium">الساعات ووقت البدء</th>
+                    <th className="px-6 py-4 font-medium">موقع المراقبة</th>
                     <th className="px-6 py-4 font-medium">الحالة</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {bookings.length > 0 ? (
-                    bookings.map((booking) => (
-                      <tr key={booking.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4 font-medium text-slate-900">{booking.course_name}</td>
-                        <td className="px-6 py-4 text-slate-600">{booking.exam_date}</td>
-                        <td className="px-6 py-4 text-slate-600">{booking.booked_hours} ساعة</td>
-                        <td className="px-6 py-4">
-                          {booking.attendance_status === 'present' ? (
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-bold ring-1 ring-emerald-200">
-                              <CheckCircle2 size={14} />
-                              <span>حاضر (ملتزم)</span>
+                    bookings.map((booking) => {
+                      const slot = slots.find(s => s.id === booking.slot_id);
+                      const bookingsForSlot = allBookings.filter(b => b.slot_id === booking.slot_id);
+                      const room = slot ? getObserverRoom(slot, booking, bookingsForSlot) : 'القاعة العامة';
+                      const startTime = slot?.start_time || 'غير محدد';
+                      
+                      return (
+                        <tr key={booking.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-6 py-4 font-medium text-slate-900">{booking.course_name}</td>
+                          <td className="px-6 py-4 text-slate-600">{booking.exam_date}</td>
+                          <td className="px-6 py-4 text-slate-600">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-semibold text-slate-800">{booking.booked_hours} ساعة</span>
+                              <span className="text-xs text-slate-400">البدء: {startTime}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-indigo-50/50 text-indigo-700 rounded-full text-xs font-bold border border-indigo-100">
+                              <MapPin size={13} className="text-indigo-400" />
+                              <span>{room}</span>
                             </span>
-                          ) : booking.attendance_status === 'absent' ? (
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-50 text-rose-600 rounded-full text-xs font-bold ring-1 ring-rose-200">
-                              <XCircle size={14} />
-                              <span>غائب</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-xs font-bold ring-1 ring-slate-200">
-                              <Clock size={14} />
-                              <span>انتظار</span>
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
+                          </td>
+                          <td className="px-6 py-4">
+                            {booking.attendance_status === 'present' ? (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-xs font-bold ring-1 ring-emerald-200">
+                                <CheckCircle2 size={14} />
+                                <span>حاضر (ملتزم)</span>
+                              </span>
+                            ) : booking.attendance_status === 'absent' ? (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-50 text-rose-600 rounded-full text-xs font-bold ring-1 ring-rose-200">
+                                <XCircle size={14} />
+                                <span>غائب</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-xs font-bold ring-1 ring-slate-200">
+                                <Clock size={14} />
+                                <span>انتظار</span>
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
                   ) : (
                     <tr>
-                      <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
+                      <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
                         لا توجد حجوزات حالية. ابدأ بحجز فترات المراقبة الآن.
                       </td>
                     </tr>

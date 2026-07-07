@@ -139,9 +139,13 @@ export default function BookingPage() {
       }
     }
 
-    if (totalBookedHours + slotHours > requiredHours) {
-      alert('لا يمكنك تجاوز عدد الساعات المطلوبة منك.');
+    if (totalBookedHours >= requiredHours) {
+      alert('عذراً، لا يمكنك حجز مواد إضافية لأن برنامجك الامتحاني مكتمل النصاب ومقفل بالكامل.');
       return;
+    }
+
+    if (totalBookedHours + slotHours > requiredHours) {
+      alert('تنويه: عدد ساعات هذه المادة يتجاوز نصابك المتبقي. يسمح لك بحجزها استثنائياً كونها المادة الأخيرة لإغلاق برنامجك الساعي بنجاح.');
     }
 
     setActionLoading(slot.id);
