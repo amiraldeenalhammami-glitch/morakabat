@@ -39,7 +39,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
       {/* Mobile Header */}
-      <div className="md:hidden bg-white border-b px-4 py-3 flex justify-between items-center sticky top-0 z-50">
+      <div 
+        className="md:hidden bg-white border-b px-4 pb-3 flex justify-between items-center sticky top-0 z-50 shadow-sm"
+        style={{ paddingTop: 'calc(env(safe-area-inset-top, 24px) + 12px)' }}
+      >
         <Logo className="w-8 h-8" />
         <button onClick={() => setIsMenuOpen(!isMenuOpen)}>
           {isMenuOpen ? <X /> : <Menu />}
@@ -47,12 +50,18 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </div>
 
       {/* Sidebar */}
-      <aside className={`
-        fixed inset-0 z-40 md:relative md:z-0
-        bg-white border-l w-64 flex-shrink-0 flex flex-col
-        transition-transform duration-300 ease-in-out
-        ${isMenuOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}
-      `}>
+      <aside 
+        className={`
+          fixed inset-0 z-40 md:relative md:z-0
+          bg-white border-l w-64 flex-shrink-0 flex flex-col
+          transition-transform duration-300 ease-in-out
+          ${isMenuOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}
+          md:pt-0
+        `}
+        style={{
+          paddingTop: isMenuOpen ? 'calc(env(safe-area-inset-top, 24px) + 12px)' : undefined
+        }}
+      >
         <div className="p-6 hidden md:block">
           <Logo className="w-10 h-10" />
         </div>
@@ -134,8 +143,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-4 md:p-8 overflow-y-visible md:overflow-y-auto">
-        <div className="max-w-6xl mx-auto">
+      <main className="flex-1 min-w-0 w-full max-w-full p-4 md:p-8 overflow-y-visible md:overflow-y-auto">
+        <div className="max-w-6xl mx-auto w-full">
           {children}
         </div>
       </main>

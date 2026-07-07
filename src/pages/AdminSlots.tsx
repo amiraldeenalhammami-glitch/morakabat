@@ -687,8 +687,8 @@ export default function AdminSlots() {
                       <p>لا توجد مواد مضافة لهذه السنة بعد</p>
                     </div>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-right text-sm md:text-base">
+                    <div className="overflow-x-auto touch-pan-x">
+                      <table className="w-full text-right text-sm md:text-base min-w-[850px] md:min-w-full">
                         <thead>
                           <tr className="bg-slate-50 text-slate-500 text-sm">
                             <th className="px-6 py-4 font-medium">المادة</th>
@@ -789,8 +789,8 @@ export default function AdminSlots() {
                                         </div>
 
                                         {/* 3-Column Table */}
-                                        <div className="overflow-hidden border border-slate-100 rounded-xl">
-                                          <table className="w-full text-right text-xs">
+                                        <div className="overflow-x-auto touch-pan-x border border-slate-100 rounded-xl">
+                                          <table className="w-full text-right text-xs min-w-[600px] md:min-w-full">
                                             <thead>
                                               <tr className="bg-slate-50 text-slate-600 font-bold border-b border-slate-100">
                                                 <th className="px-4 py-3 text-right">مكان المراقبة</th>
@@ -1352,8 +1352,8 @@ export default function AdminSlots() {
               {parsedSlots.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="text-xs font-bold text-slate-800">معاينة المواد والتحليل قبل الإنشاء والرفع:</h4>
-                  <div className="border border-slate-100 rounded-xl overflow-hidden max-h-52 overflow-y-auto">
-                    <table className="w-full text-right text-xs">
+                  <div className="border border-slate-100 rounded-xl overflow-x-auto touch-pan-x max-h-52 overflow-y-auto">
+                    <table className="w-full text-right text-xs min-w-[550px] md:min-w-full">
                       <thead>
                         <tr className="bg-slate-50 text-slate-600 font-bold border-b border-slate-100">
                           <th className="p-2 text-right">اسم المادة</th>

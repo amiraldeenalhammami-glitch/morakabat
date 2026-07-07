@@ -652,8 +652,17 @@ export default function AdminStudents() {
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-        <table className="w-full text-right">
+      {/* Mobile Scroll Hint */}
+      <div className="md:hidden bg-indigo-50/50 border border-indigo-100/50 text-indigo-700 text-xs font-bold py-3 px-4 rounded-2xl flex items-center justify-between gap-2 shadow-xs animate-pulse">
+        <span className="flex items-center gap-1.5">
+          <span>💡</span>
+          <span>اسحب الجدول لليمين واليسار لمشاهدة كامل البيانات (الساعات، الملاحظات، الأزرار)</span>
+        </span>
+        <span className="text-sm">↔️</span>
+      </div>
+
+      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-x-auto touch-pan-x">
+        <table className="w-full text-right min-w-[1100px] md:min-w-full">
           <thead>
             <tr className="bg-slate-50 text-slate-500 text-sm">
               <th className="px-6 py-4 font-medium">المراقب</th>
@@ -814,7 +823,7 @@ export default function AdminStudents() {
                   
                   {isExpanded && (
                     <tr>
-                      <td colSpan={5} className="px-6 py-4 bg-slate-50/50">
+                      <td colSpan={6} className="px-6 py-4 bg-slate-50/50">
                         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden animate-in slide-in-from-top-2 duration-200">
                           <div className="p-4 border-b border-slate-50 bg-slate-50/30 flex justify-between items-center">
                             <h4 className="font-bold text-slate-700 text-sm">سجل فترات المراقبة والالتزام</h4>
