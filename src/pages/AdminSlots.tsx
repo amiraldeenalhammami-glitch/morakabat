@@ -656,7 +656,13 @@ export default function AdminSlots() {
 
       <div className="space-y-4">
         {years.map((year) => {
-          const yearSlots = slots.filter(s => s.academic_year === year);
+          const yearSlots = slots
+            .filter(s => s.academic_year === year)
+            .sort((a, b) => {
+              const dateCompare = a.exam_date.localeCompare(b.exam_date);
+              if (dateCompare !== 0) return dateCompare;
+              return a.start_time.localeCompare(b.start_time);
+            });
           const isOpen = expandedYear === year;
 
           return (
