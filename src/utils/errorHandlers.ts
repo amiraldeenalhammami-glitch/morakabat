@@ -47,6 +47,19 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   }
+
+  const errorStr = errInfo.error.toLowerCase();
+  const isQuotaError = errorStr.includes('quota') || 
+                       errorStr.includes('limit exceeded') || 
+                       errorStr.includes('resource exhausted');
+
+  if (isQuotaError) {
+    console.warn('Firestore Quota Exceeded (Handled Gracefully):', JSON.stringify(errInfo));
+    // Dispatch a global event so the AuthProvider or other UI components can show a friendly warning
+    window.dispatchEvent(new CustomEvent('firestore-quota-exceeded', { detail: errInfo }));
+    return; // Return gracefully without throwing to prevent uncaught asynchronous errors
+  }
+
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
