@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { doc, onSnapshot, updateDoc, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { AppSettings } from '../types';
@@ -131,6 +131,77 @@ export default function AdminSettings() {
       handleFirestoreError(err, OperationType.WRITE, 'settings/global');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const [migrationLoading, setMigrationLoading] = useState(false);
+  const [migrationLog, setMigrationLog] = useState<string[]>([]);
+  const [migrationResult, setMigrationResult] = useState<{ scanned: number, mapped: number, deleted: number } | null>(null);
+
+  const runDatabaseMigration = async () => {
+    setMigrationLoading(true);
+    setMigrationLog([]);
+    setMigrationResult(null);
+    const logList: string[] = [];
+    const addLog = (msg: string) => {
+      logList.push(`[${new Date().toLocaleTimeString('ar-EG')}] ${msg}`);
+      setMigrationLog([...logList]);
+    };
+
+    try {
+      addLog("بدء عملية فحص وصيانة قاعدة البيانات...");
+      
+      const bookingsSnap = await getDocs(collection(db, 'bookings'));
+      const slotsSnap = await getDocs(collection(db, 'exam_slots'));
+
+      const allBookingsData = bookingsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+      const allSlotsData = slotsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any));
+
+      addLog(`تم تحميل ${allBookingsData.length} حجز و ${allSlotsData.length} مادة امتحانية.`);
+
+      let scannedCount = 0;
+      let mappedCount = 0;
+      let deletedCount = 0;
+
+      for (const booking of allBookingsData) {
+        scannedCount++;
+        // Find if associated slot exists (even soft-deleted)
+        const slotExists = allSlotsData.some(s => s.id === booking.slot_id);
+        
+        if (!slotExists) {
+          addLog(`عثرنا على حجز معلق للمراقب: (${booking.student_name}) لمادة قديمة: "${booking.course_name}" (معرّف غير موجود).`);
+          
+          // Try to map this orphaned booking to a matching active slot based on course_name
+          const matchingSlot = allSlotsData.find(s => 
+            !s.isDeleted && 
+            s.course_name.trim().toLowerCase() === booking.course_name.trim().toLowerCase()
+          );
+
+          if (matchingSlot) {
+            addLog(`جاري مطابقة وربط الحجز المعلق بالمادة الجديدة المماثلة: "${matchingSlot.course_name}" تلقائياً...`);
+            
+            await updateDoc(doc(db, 'bookings', booking.id), {
+              slot_id: matchingSlot.id,
+              booked_hours: matchingSlot.duration_hours || booking.booked_hours || 2
+            });
+            
+            mappedCount++;
+            addLog(`تمت إعادة ربط الحجز بنجاح مع المعرّف الجديد (${matchingSlot.id})!`);
+          } else {
+            addLog(`لم نجد أي مادة مطابقة نشطة بالاسم: "${booking.course_name}". جاري تنظيف وحذف الحجز المعلق لحماية نصاب المراقب...`);
+            await deleteDoc(doc(db, 'bookings', booking.id));
+            deletedCount++;
+            addLog(`تم حذف الحجز المعلق بنجاح.`);
+          }
+        }
+      }
+
+      setMigrationResult({ scanned: scannedCount, mapped: mappedCount, deleted: deletedCount });
+      addLog("اكتملت عملية صيانة قاعدة البيانات بنجاح!");
+    } catch (err: any) {
+      addLog(`حدث خطأ أثناء الصيانة: ${err.message || err}`);
+    } finally {
+      setMigrationLoading(false);
     }
   };
 
@@ -363,6 +434,62 @@ export default function AdminSettings() {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Database Migration & Maintenance Tool */}
+          <div className="border-t border-slate-100 pt-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-amber-50 text-amber-600 rounded-xl">
+                <Settings size={20} />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm">صيانة وتحديث قاعدة البيانات</h3>
+                <p className="text-xs text-slate-500">فحص الحجوزات المعلقة وإعادة ربطها بالمواد الجديدة المستعادة تلقائياً</p>
+              </div>
+            </div>
+
+            <button
+              onClick={runDatabaseMigration}
+              disabled={migrationLoading}
+              className="w-full bg-amber-500 text-white py-3 rounded-2xl font-bold hover:bg-amber-600 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 text-sm"
+            >
+              {migrationLoading ? (
+                <>
+                  <Loader2 className="animate-spin" size={18} />
+                  <span>جاري فحص وصيانة قاعدة البيانات...</span>
+                </>
+              ) : (
+                <span>بدء صيانة وربط الحجوزات</span>
+              )}
+            </button>
+
+            {migrationLog.length > 0 && (
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-slate-700">سجل الصيانة المباشر:</span>
+                <div className="bg-slate-900 text-slate-100 p-4 rounded-2xl text-xs font-mono h-48 overflow-y-auto space-y-1 text-left" dir="ltr">
+                  {migrationLog.map((logLine, idx) => (
+                    <div key={idx} className="whitespace-pre-wrap">{logLine}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {migrationResult && (
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-150 grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <div className="text-xs text-slate-400 font-bold">الحجوزات التي تم فحصها</div>
+                  <div className="text-lg font-black text-slate-800">{migrationResult.scanned}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-emerald-600 font-bold">تم ربطها بنجاح</div>
+                  <div className="text-lg font-black text-emerald-600">{migrationResult.mapped}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-rose-600 font-bold">تم تنظيفها (حذفها)</div>
+                  <div className="text-lg font-black text-rose-600">{migrationResult.deleted}</div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

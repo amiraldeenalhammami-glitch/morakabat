@@ -103,7 +103,12 @@ export default function StudentDashboard() {
     return () => unsubscribe();
   }, [profile?.uid, profile?.status]);
 
-  const totalBookedHours = bookings.reduce((acc, curr) => acc + Math.abs(Number(curr.booked_hours || 0)), 0);
+  const activeBookings = bookings.filter(b => {
+    const slot = slots.find(s => s.id === b.slot_id);
+    return slot && !slot.isDeleted;
+  });
+
+  const totalBookedHours = activeBookings.reduce((acc, curr) => acc + Math.abs(Number(curr.booked_hours || 0)), 0);
   const requiredHours = Number(profile?.required_hours_mode === 'manual' ? (profile?.required_hours ?? 16) : (globalSettings?.default_required_hours ?? 16));
   const remainingHours = Math.max(0, requiredHours - totalBookedHours);
   const progress = Math.min(100, (totalBookedHours / requiredHours) * 100);
@@ -349,8 +354,8 @@ export default function StudentDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {bookings.length > 0 ? (
-                    bookings.map((booking) => {
+                  {activeBookings.length > 0 ? (
+                    activeBookings.map((booking) => {
                       const slot = slots.find(s => s.id === booking.slot_id);
                       const bookingsForSlot = allBookings.filter(b => b.slot_id === booking.slot_id);
                       const room = slot ? getObserverRoom(slot, booking, bookingsForSlot) : 'القاعة العامة';

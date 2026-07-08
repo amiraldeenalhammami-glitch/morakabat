@@ -133,7 +133,7 @@ export default function AdminSlots() {
     
     years.forEach((yr) => {
       const yearSlots = slots
-        .filter(s => s.academic_year === yr)
+        .filter(s => s.academic_year === yr && !s.isDeleted)
         .sort((a, b) => a.exam_date.localeCompare(b.exam_date));
         
       if (yearSlots.length > 0) {
@@ -296,7 +296,58 @@ export default function AdminSlots() {
       if (editingSlot) {
         await updateDoc(doc(db, 'exam_slots', editingSlot.id), data);
       } else {
-        await addDoc(collection(db, 'exam_slots'), data);
+        // Check if there is an existing deleted slot with the same course_name and academic_year
+        const existingDeletedSlot = slots.find(s => 
+          s.isDeleted && 
+          s.course_name.trim() === formData.course_name.trim() && 
+          s.academic_year === formData.academic_year
+        );
+
+        if (existingDeletedSlot) {
+          // Found a deleted slot! Let's restore it.
+          // But first, process its bookings to ensure conditional auto-remapping based on quota
+          const slotBookingsToProcess = bookings.filter(b => b.slot_id === existingDeletedSlot.id);
+          
+          for (const booking of slotBookingsToProcess) {
+            const student = students.find(u => u.uid === booking.student_id);
+            const defaultReqHours = globalSettings?.default_required_hours ?? 16;
+            const requiredHours = Number(student?.required_hours_mode === 'manual' ? (student?.required_hours ?? defaultReqHours) : defaultReqHours);
+            
+            // Calculate other active hours (excluding the current slot)
+            const studentOtherBookings = bookings.filter(b => b.student_id === booking.student_id && b.slot_id !== existingDeletedSlot.id);
+            const otherActiveHours = studentOtherBookings.reduce((sum, b) => {
+              const otherSlot = slots.find(s => s.id === b.slot_id);
+              if (otherSlot && !otherSlot.isDeleted) {
+                return sum + Math.abs(Number(b.booked_hours || 0));
+              }
+              return sum;
+            }, 0);
+            
+            const newSlotHours = Number(formData.duration_hours) || 2;
+            
+            if (otherActiveHours + newSlotHours > requiredHours) {
+              // Student quota is full, delete/cancel this booking
+              await deleteDoc(doc(db, 'bookings', booking.id));
+            } else {
+              // Quota is safe, keep the booking active and update booked_hours if changed
+              if (booking.booked_hours !== newSlotHours) {
+                await updateDoc(doc(db, 'bookings', booking.id), { booked_hours: newSlotHours });
+              }
+            }
+          }
+
+          // Now update the slot document to restore it
+          await updateDoc(doc(db, 'exam_slots', existingDeletedSlot.id), {
+            ...data,
+            isDeleted: false
+          });
+        } else {
+          // Add as a new slot document
+          await addDoc(collection(db, 'exam_slots'), {
+            ...data,
+            isDeleted: false
+          });
+        }
       }
       setIsModalOpen(false);
       setEditingSlot(null);
@@ -378,9 +429,9 @@ export default function AdminSlots() {
 
   const handleDelete = async (id: string) => {
     try {
-      await deleteDoc(doc(db, 'exam_slots', id));
+      await updateDoc(doc(db, 'exam_slots', id), { isDeleted: true });
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `exam_slots/${id}`);
+      handleFirestoreError(err, OperationType.UPDATE, `exam_slots/${id}`);
     }
   };
 
@@ -468,34 +519,86 @@ export default function AdminSlots() {
     setImportError(null);
     try {
       for (const s of parsedSlots) {
-        await addDoc(collection(db, 'exam_slots'), {
-          course_name: s.course_name,
-          academic_year: s.academic_year,
-          exam_date: s.exam_date,
-          start_time: s.start_time,
-          end_time: s.end_time,
-          session_type: s.session_type,
-          duration_hours: s.duration_hours || 2,
-          required_invigilators: 2, // Default
-          observers_per_room: 3, // Default
-          location: '',
-          current_invigilators: 0,
-          has_studios: false,
-          studios_from: 1,
-          studios_to: 8,
-          has_lobbies: false,
-          lobbies_from: 1,
-          lobbies_to: 3,
-          has_basements: false,
-          basements_from: 1,
-          basements_to: 3,
-          has_halls: false,
-          halls_from: 1,
-          halls_to: 2,
-          has_expansions: false,
-          expansions_from: 1,
-          expansions_to: 6,
-        });
+        // Find if we have an existing deleted slot
+        const existingDeletedSlot = slots.find(item => 
+          item.isDeleted && 
+          item.course_name.trim() === s.course_name.trim() && 
+          item.academic_year === s.academic_year
+        );
+
+        if (existingDeletedSlot) {
+          // Restore and remap!
+          // Filter bookings for this slot in our bookings array
+          const slotBookingsToProcess = bookings.filter(b => b.slot_id === existingDeletedSlot.id);
+          
+          for (const booking of slotBookingsToProcess) {
+            const student = students.find(u => u.uid === booking.student_id);
+            const defaultReqHours = globalSettings?.default_required_hours ?? 16;
+            const requiredHours = Number(student?.required_hours_mode === 'manual' ? (student?.required_hours ?? defaultReqHours) : defaultReqHours);
+            
+            const studentOtherBookings = bookings.filter(b => b.student_id === booking.student_id && b.slot_id !== existingDeletedSlot.id);
+            const otherActiveHours = studentOtherBookings.reduce((sum, b) => {
+              const otherSlot = slots.find(slotItem => slotItem.id === b.slot_id);
+              if (otherSlot && !otherSlot.isDeleted) {
+                return sum + Math.abs(Number(b.booked_hours || 0));
+              }
+              return sum;
+            }, 0);
+            
+            const newSlotHours = Number(s.duration_hours) || 2;
+            
+            if (otherActiveHours + newSlotHours > requiredHours) {
+              await deleteDoc(doc(db, 'bookings', booking.id));
+            } else {
+              if (booking.booked_hours !== newSlotHours) {
+                await updateDoc(doc(db, 'bookings', booking.id), { booked_hours: newSlotHours });
+              }
+            }
+          }
+
+          // Restore slot
+          await updateDoc(doc(db, 'exam_slots', existingDeletedSlot.id), {
+            course_name: s.course_name,
+            academic_year: s.academic_year,
+            exam_date: s.exam_date,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            session_type: s.session_type,
+            duration_hours: s.duration_hours || 2,
+            isDeleted: false
+          });
+        } else {
+          // Just add normally
+          await addDoc(collection(db, 'exam_slots'), {
+            course_name: s.course_name,
+            academic_year: s.academic_year,
+            exam_date: s.exam_date,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            session_type: s.session_type,
+            duration_hours: s.duration_hours || 2,
+            required_invigilators: 2, // Default
+            observers_per_room: 3, // Default
+            location: '',
+            current_invigilators: 0,
+            has_studios: false,
+            studios_from: 1,
+            studios_to: 8,
+            has_lobbies: false,
+            lobbies_from: 1,
+            lobbies_to: 3,
+            has_basements: false,
+            basements_from: 1,
+            basements_to: 3,
+            has_halls: false,
+            halls_from: 1,
+            halls_to: 2,
+            has_expansions: false,
+            expansions_from: 1,
+            expansions_to: 6,
+            isDeleted: false
+          });
+        }
       }
       alert(`تم استيراد ${parsedSlots.length} فترة امتحانية بنجاح!`);
       setIsUploadModalOpen(false);
@@ -605,7 +708,7 @@ export default function AdminSlots() {
   const handleCompleteProgram = () => {
     // 1. Calculate Total Slot Hours (sum of: required_invigilators * slot_duration_in_hours for each slot)
     let totalSlotHours = 0;
-    slots.forEach(s => {
+    slots.filter(s => !s.isDeleted).forEach(s => {
       try {
         const durationHours = s.duration_hours !== undefined 
           ? Number(s.duration_hours) 
@@ -755,7 +858,7 @@ export default function AdminSlots() {
       <div className="space-y-4">
         {years.map((year) => {
           const yearSlots = slots
-            .filter(s => s.academic_year === year)
+            .filter(s => s.academic_year === year && !s.isDeleted)
             .sort((a, b) => {
               const dateCompare = a.exam_date.localeCompare(b.exam_date);
               if (dateCompare !== 0) return dateCompare;

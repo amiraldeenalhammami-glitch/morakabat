@@ -61,7 +61,11 @@ export default function BookingPage() {
     });
   };
 
-  const myBookings = allBookings.filter(b => b.student_id === profile?.uid);
+  const myBookings = allBookings.filter(b => {
+    if (b.student_id !== profile?.uid) return false;
+    const slot = slots.find(s => s.id === b.slot_id);
+    return !!slot;
+  });
 
   useEffect(() => {
     if (profile && profile.status !== 'active') {
@@ -89,7 +93,9 @@ export default function BookingPage() {
     });
 
     const unsubscribeSlots = onSnapshot(collection(db, 'exam_slots'), (snapshot) => {
-      const slotsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExamSlot));
+      const slotsData = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as ExamSlot))
+        .filter(s => !s.isDeleted);
       setSlots(slotsData);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'exam_slots');

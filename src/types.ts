@@ -39,6 +39,7 @@ export interface ExamSlot {
   location?: string;
   academic_year: 1 | 2 | 3 | 4 | 5;
   duration_hours?: number; // Duration of exam in hours (e.g. 1, 2, 3, 4, 5)
+  isDeleted?: boolean;
 
   // New rooms config fields
   observers_per_room?: number;
