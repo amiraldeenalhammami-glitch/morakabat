@@ -5,6 +5,7 @@ import { auth } from '../firebase';
 import { LogOut, User, LayoutDashboard, Calendar, Users, Settings, Menu, X, Download } from 'lucide-react';
 import { Logo } from './Logo';
 import { usePWA } from '../hooks/usePWA';
+import { checkAndRunTrimming } from '../utils/trimming';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { profile, isAdmin } = useAuth();
@@ -12,6 +13,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const { canInstall, installApp } = usePWA();
+
+  React.useEffect(() => {
+    checkAndRunTrimming();
+  }, [location.pathname]);
 
   const handleLogout = async () => {
     await auth.signOut();

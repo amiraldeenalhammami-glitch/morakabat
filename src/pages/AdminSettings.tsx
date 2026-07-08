@@ -23,11 +23,17 @@ export default function AdminSettings() {
     reset_password: '',
     security_code: '',
     profiles_locked: false,
+    trim_hours_duration: 6,
+    trim_hours_deadline: null,
+    trim_hours_target: null,
+    trim_hours_started_at: null,
+    trim_hours_processed: false,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [timeLeft, setTimeLeft] = useState<string>('');
 
   useEffect(() => {
     if (!profile?.uid) return;
@@ -46,6 +52,11 @@ export default function AdminSettings() {
           reset_password: data.reset_password ?? '',
           security_code: data.security_code ?? '',
           profiles_locked: data.profiles_locked ?? false,
+          trim_hours_duration: data.trim_hours_duration ?? 6,
+          trim_hours_deadline: data.trim_hours_deadline ?? null,
+          trim_hours_target: data.trim_hours_target ?? null,
+          trim_hours_started_at: data.trim_hours_started_at ?? null,
+          trim_hours_processed: data.trim_hours_processed ?? false,
         });
       }
       setLoading(false);
@@ -54,6 +65,85 @@ export default function AdminSettings() {
     });
     return () => unsubscribe();
   }, [profile?.uid]);
+
+  useEffect(() => {
+    if (!settings.trim_hours_deadline) {
+      setTimeLeft('');
+      return;
+    }
+    const interval = setInterval(() => {
+      const diff = new Date(settings.trim_hours_deadline!).getTime() - Date.now();
+      if (diff <= 0) {
+        setTimeLeft('انتهت المهلة - سيتم تقليص الساعات تلقائياً عند أول تحديث أو زيارة');
+        clearInterval(interval);
+      } else {
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        setTimeLeft(`متبقي ${hours} ساعة و ${minutes} دقيقة و ${seconds} ثانية`);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [settings.trim_hours_deadline]);
+
+  const handleStartTrimmingGracePeriod = async () => {
+    if (saving) return;
+    
+    const confirmed = window.confirm(
+      `هل أنت متأكد من بدء مهلة تقليص الساعات؟\n` +
+      `سيتم منح المراقبين الذين تتجاوز ساعاتهم الحالية ${settings.default_required_hours} ساعة مهلة مدتها ${settings.trim_hours_duration || 6} ساعات للتعديل اليدوي، وبعدها سيقوم النظام بالتقليص تلقائياً.`
+    );
+    if (!confirmed) return;
+
+    setSaving(true);
+    setMessage(null);
+    try {
+      const duration = settings.trim_hours_duration || 6;
+      const deadline = new Date(Date.now() + duration * 60 * 60 * 1000).toISOString();
+      
+      const updatedSettings = {
+        ...settings,
+        trim_hours_deadline: deadline,
+        trim_hours_target: settings.default_required_hours,
+        trim_hours_started_at: new Date().toISOString(),
+        trim_hours_processed: false
+      };
+
+      await setDoc(doc(db, 'settings', 'global'), updatedSettings);
+      setSettings(updatedSettings);
+      setMessage({ type: 'success', text: 'تم بدء مهلة التقليص وإرسال التنبيهات للمراقبين بنجاح!' });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'settings/global');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancelTrimmingGracePeriod = async () => {
+    if (saving) return;
+    const confirmed = window.confirm('هل أنت متأكد من إلغاء مهلة التقليص النشطة؟');
+    if (!confirmed) return;
+
+    setSaving(true);
+    setMessage(null);
+    try {
+      const updatedSettings = {
+        ...settings,
+        trim_hours_deadline: null,
+        trim_hours_target: null,
+        trim_hours_started_at: null,
+        trim_hours_processed: false
+      };
+
+      await setDoc(doc(db, 'settings', 'global'), updatedSettings);
+      setSettings(updatedSettings);
+      setMessage({ type: 'success', text: 'تم إلغاء مهلة التقليص بنجاح.' });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'settings/global');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -434,6 +524,53 @@ export default function AdminSettings() {
               <span className="text-slate-500 font-medium">ساعة</span>
             </div>
             <p className="text-xs text-slate-400 mt-2">هذا الرقم سيطبق على جميع المراقبين الذين لم يتم تحديد ساعات خاصة بهم.</p>
+          </div>
+
+          {/* New fields for surplus trimming grace period */}
+          <div className="md:col-span-2 border-t border-slate-100 pt-6 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">مدة مهلة التعديل للمراقبين (بالساعات)</label>
+              <div className="flex items-center gap-4">
+                <input
+                  type="number"
+                  min="1"
+                  value={settings.trim_hours_duration ?? 6}
+                  onChange={(e) => setSettings({ ...settings, trim_hours_duration: parseInt(e.target.value) || 6 })}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+                <span className="text-slate-500 font-medium">ساعة</span>
+              </div>
+              <p className="text-xs text-slate-400 mt-2">الوقت المتاح للمراقبين لتخفيض ساعاتهم الزائدة بأنفسهم قبل الحذف التلقائي.</p>
+            </div>
+
+            <div className="pt-2">
+              {settings.trim_hours_deadline ? (
+                <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl space-y-3">
+                  <div className="flex items-center gap-3 text-amber-800">
+                    <AlertCircle size={20} className="shrink-0" />
+                    <div>
+                      <p className="font-bold text-sm">مهلة تقليص الساعات الزائدة نشطة حالياً</p>
+                      <p className="text-xs mt-0.5 font-semibold text-slate-700">{timeLeft}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCancelTrimmingGracePeriod}
+                    className="w-full bg-rose-600 hover:bg-rose-700 text-white py-2 px-4 rounded-xl font-bold text-xs transition-colors"
+                  >
+                    إلغاء مهلة التقليص الحالية
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleStartTrimmingGracePeriod}
+                  className="w-full bg-amber-500 hover:bg-amber-600 text-white py-3.5 px-4 rounded-2xl font-bold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm"
+                >
+                  <span>⚠️ بدء مهلة تقليص الساعات الفائضة</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

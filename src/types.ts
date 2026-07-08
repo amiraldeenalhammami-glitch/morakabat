@@ -87,6 +87,11 @@ export interface AppSettings {
   reset_password?: string;
   security_code?: string;
   profiles_locked?: boolean;
+  trim_hours_duration?: number;
+  trim_hours_deadline?: string | null;
+  trim_hours_target?: number | null;
+  trim_hours_started_at?: string | null;
+  trim_hours_processed?: boolean;
 }
 
 export interface GroupNote {

@@ -17,6 +17,7 @@ export default function StudentDashboard() {
   const [globalSettings, setGlobalSettings] = useState<AppSettings | null>(null);
   const [currentNote, setCurrentNote] = useState<GroupNote | null>(null);
   const { canInstall, installApp } = usePWA();
+  const [trimTimeLeft, setTrimTimeLeft] = useState<string>('');
 
   useEffect(() => {
     if (!profile?.uid) return;
@@ -31,6 +32,11 @@ export default function StudentDashboard() {
           exam_start: data.exam_start ?? '',
           exam_end: data.exam_end ?? '',
           default_required_hours: data.default_required_hours ?? 16,
+          trim_hours_duration: data.trim_hours_duration ?? 6,
+          trim_hours_deadline: data.trim_hours_deadline ?? null,
+          trim_hours_target: data.trim_hours_target ?? null,
+          trim_hours_started_at: data.trim_hours_started_at ?? null,
+          trim_hours_processed: data.trim_hours_processed ?? false,
         });
       }
     }, (error) => {
@@ -39,6 +45,26 @@ export default function StudentDashboard() {
 
     return () => unsubscribeSettings();
   }, [profile?.uid]);
+
+  useEffect(() => {
+    if (!globalSettings?.trim_hours_deadline) {
+      setTrimTimeLeft('');
+      return;
+    }
+    const interval = setInterval(() => {
+      const diff = new Date(globalSettings.trim_hours_deadline!).getTime() - Date.now();
+      if (diff <= 0) {
+        setTrimTimeLeft('انتهت المهلة - سيتم تقليص الساعات تلقائياً');
+        clearInterval(interval);
+      } else {
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        setTrimTimeLeft(`متبقي ${hours} ساعة و ${minutes} دقيقة و ${seconds} ثانية`);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [globalSettings?.trim_hours_deadline]);
 
   useEffect(() => {
     if (!profile?.uid) return;
@@ -112,6 +138,11 @@ export default function StudentDashboard() {
   const requiredHours = Number(profile?.required_hours_mode === 'manual' ? (profile?.required_hours ?? 16) : (globalSettings?.default_required_hours ?? 16));
   const remainingHours = Math.max(0, requiredHours - totalBookedHours);
   const progress = Math.min(100, (totalBookedHours / requiredHours) * 100);
+
+  const isTargetedByTrimming = 
+    !!(globalSettings?.trim_hours_deadline && 
+    new Date(globalSettings.trim_hours_deadline) > new Date() && 
+    totalBookedHours > (globalSettings.trim_hours_target || requiredHours));
 
   const getRegistrationMessage = () => {
     if (loading || !globalSettings) return "جاري تحميل الإعدادات...";
@@ -283,6 +314,29 @@ export default function StudentDashboard() {
                 <p className="font-bold">{regMessage}</p>
                 <p className="text-sm opacity-90">يرجى مراجعة الإدارة لأي استفسارات إضافية.</p>
               </div>
+            </div>
+          )}
+
+          {isTargetedByTrimming && (
+            <div className="bg-rose-50 border border-rose-200 p-6 rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-rose-800 animate-pulse">
+              <div className="flex items-center gap-4">
+                <AlertCircle size={32} className="shrink-0 text-rose-600" />
+                <div>
+                  <h3 className="font-bold text-lg text-rose-900">تنبيه إداري عاجل: تم تخفيض النصاب الافتراضي للساعات</h3>
+                  <p className="text-sm mt-1 text-rose-700">
+                    يرجى الدخول وإلغاء مادة (ساعتين) تختارها بنفسك خلال المهلة المحددة، وإلا سيقوم النظام بإلغاء مادة تلقائياً لتصحيح نصابك.
+                  </p>
+                  <p className="text-xs mt-1 font-bold text-slate-700">
+                    المهلة المتبقية للتعديل اليدوي: <span className="text-rose-600 text-sm font-extrabold">{trimTimeLeft}</span>
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => window.location.href = '/book'}
+                className="bg-rose-600 text-white font-bold text-sm px-6 py-2.5 rounded-xl hover:bg-rose-700 transition-colors shrink-0"
+              >
+                تعديل الحجوزات الآن
+              </button>
             </div>
           )}
 
