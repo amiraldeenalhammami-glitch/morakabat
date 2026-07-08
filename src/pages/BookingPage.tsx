@@ -10,6 +10,17 @@ import { format, parseISO, differenceInHours, eachDayOfInterval, isSameDay, star
 import { ar } from 'date-fns/locale';
 import { getSlotRooms, getObserverRoom } from '../utils/roomUtils';
 
+const safeParseISO = (dateStr: string | undefined | null): Date | null => {
+  if (!dateStr) return null;
+  try {
+    const parsed = parseISO(dateStr);
+    if (isNaN(parsed.getTime())) return null;
+    return parsed;
+  } catch (e) {
+    return null;
+  }
+};
+
 export default function BookingPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
@@ -66,9 +77,11 @@ export default function BookingPage() {
         const data = docSnap.data() as AppSettings;
         setGlobalSettings(data);
         if (data.exam_start) {
-          const start = parseISO(data.exam_start);
-          setSelectedDate(start);
-          setCurrentMonth(start);
+          const start = safeParseISO(data.exam_start);
+          if (start) {
+            setSelectedDate(start);
+            setCurrentMonth(start);
+          }
         }
       }
     }, (error) => {
@@ -158,9 +171,13 @@ export default function BookingPage() {
       slotHours = Math.max(1, Math.abs(Number(slot.duration_hours)));
     } else {
       try {
-        const startTime = parseISO(`2000-01-01T${slot.start_time}`);
-        const endTime = parseISO(`2000-01-01T${slot.end_time}`);
-        slotHours = Math.max(1, Math.abs(differenceInHours(endTime, startTime))) || 2;
+        const startTime = safeParseISO(`2000-01-01T${slot.start_time}`);
+        const endTime = safeParseISO(`2000-01-01T${slot.end_time}`);
+        if (startTime && endTime) {
+          slotHours = Math.max(1, Math.abs(differenceInHours(endTime, startTime))) || 2;
+        } else {
+          slotHours = 2;
+        }
       } catch (e) {
         slotHours = 2;
       }
@@ -240,7 +257,8 @@ export default function BookingPage() {
   const formatDateSafe = (dateStr: string | undefined) => {
     if (!dateStr) return 'غير محدد';
     try {
-      return format(parseISO(dateStr), 'dd MMMM yyyy', { locale: ar });
+      const parsed = safeParseISO(dateStr);
+      return parsed ? format(parsed, 'dd MMMM yyyy', { locale: ar }) : dateStr;
     } catch (e) {
       return dateStr;
     }
@@ -410,14 +428,19 @@ export default function BookingPage() {
                   const endDate = endOfWeek(monthEnd);
                   const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
                   
-                  const examInterval = globalSettings?.exam_start && globalSettings?.exam_end 
-                    ? { start: parseISO(globalSettings.exam_start), end: parseISO(globalSettings.exam_end) }
+                  const examStartParsed = globalSettings?.exam_start ? safeParseISO(globalSettings.exam_start) : null;
+                  const examEndParsed = globalSettings?.exam_end ? safeParseISO(globalSettings.exam_end) : null;
+                  const examInterval = examStartParsed && examEndParsed 
+                    ? { start: examStartParsed, end: examEndParsed }
                     : null;
 
                   return calendarDays.map(day => {
                     const isCurrentMonth = isSameDay(startOfMonth(day), monthStart);
                     const isSelected = isSameDay(day, selectedDate);
-                    const hasSlots = slots.some(s => isSameDay(parseISO(s.exam_date), day));
+                    const hasSlots = slots.some(s => {
+                      const parsed = safeParseISO(s.exam_date);
+                      return parsed ? isSameDay(parsed, day) : false;
+                    });
                     const isExamPeriod = examInterval ? isWithinInterval(day, examInterval) : false;
                     const isDisabled = !isExamPeriod && isCurrentMonth;
 
@@ -464,13 +487,19 @@ export default function BookingPage() {
                 فترات يوم {format(selectedDate, 'EEEE d MMMM', { locale: ar })}
               </h2>
               <div className="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-2xl text-sm font-bold">
-                {slots.filter(s => isSameDay(parseISO(s.exam_date), selectedDate)).length} فترات متاحة
+                {slots.filter(s => {
+                  const parsed = safeParseISO(s.exam_date);
+                  return parsed ? isSameDay(parsed, selectedDate) : false;
+                }).length} فترات متاحة
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {slots
-                .filter(s => isSameDay(parseISO(s.exam_date), selectedDate))
+                .filter(s => {
+                  const parsed = safeParseISO(s.exam_date);
+                  return parsed ? isSameDay(parsed, selectedDate) : false;
+                })
                 .sort((a, b) => a.start_time.localeCompare(b.start_time))
                 .map((slot) => (
                   <SlotCard 
@@ -487,7 +516,10 @@ export default function BookingPage() {
                   />
                 ))}
               
-              {slots.filter(s => isSameDay(parseISO(s.exam_date), selectedDate)).length === 0 && (
+              {slots.filter(s => {
+                const parsed = safeParseISO(s.exam_date);
+                return parsed ? isSameDay(parsed, selectedDate) : false;
+              }).length === 0 && (
                 <div className="col-span-full py-12 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
                   <CalendarIcon className="mx-auto text-slate-300 mb-4" size={40} />
                   <p className="text-slate-400 text-sm">لا توجد فترات مراقبة في هذا اليوم.</p>
@@ -656,7 +688,10 @@ function SlotCard({ slot, isBooked, allBookings, studentId, currentInvigilators,
           </span>
           {showDate ? (
             <span className="text-[10px] font-bold text-indigo-600">
-              {format(parseISO(slot.exam_date), 'EEEE d MMMM', { locale: ar })}
+              {(() => {
+                const parsed = safeParseISO(slot.exam_date);
+                return parsed ? format(parsed, 'EEEE d MMMM', { locale: ar }) : slot.exam_date || 'تاريخ غير صالح';
+              })()}
             </span>
           ) : (
             <span className="text-[10px] font-bold text-slate-400">السنة {yearNames[slot.academic_year - 1]}</span>
