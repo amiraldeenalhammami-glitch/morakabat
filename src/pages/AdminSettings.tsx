@@ -165,10 +165,10 @@ export default function AdminSettings() {
 
       for (const booking of allBookingsData) {
         scannedCount++;
-        // Find if associated slot exists (even soft-deleted)
-        const slotExists = allSlotsData.some(s => s.id === booking.slot_id);
+        // Find if associated slot exists
+        const associatedSlot = allSlotsData.find(s => s.id === booking.slot_id);
         
-        if (!slotExists) {
+        if (!associatedSlot) {
           addLog(`عثرنا على حجز معلق للمراقب: (${booking.student_name}) لمادة قديمة: "${booking.course_name}" (معرّف غير موجود).`);
           
           // Try to map this orphaned booking to a matching active slot based on course_name
@@ -178,20 +178,67 @@ export default function AdminSettings() {
           );
 
           if (matchingSlot) {
-            addLog(`جاري مطابقة وربط الحجز المعلق بالمادة الجديدة المماثلة: "${matchingSlot.course_name}" تلقائياً...`);
-            
-            await updateDoc(doc(db, 'bookings', booking.id), {
-              slot_id: matchingSlot.id,
-              booked_hours: matchingSlot.duration_hours || booking.booked_hours || 2
-            });
-            
-            mappedCount++;
-            addLog(`تمت إعادة ربط الحجز بنجاح مع المعرّف الجديد (${matchingSlot.id})!`);
+            // Check if student already has another booking for this matching active slot
+            const alreadyHasBookingForActiveSlot = allBookingsData.some(b => 
+              b.student_id === booking.student_id && 
+              b.slot_id === matchingSlot.id &&
+              b.id !== booking.id
+            );
+
+            if (alreadyHasBookingForActiveSlot) {
+              addLog(`الطالب لديه بالفعل حجز نشط في المادة المماثلة: "${matchingSlot.course_name}". جاري حذف الحجز المعلق المكرر نهائياً...`);
+              await deleteDoc(doc(db, 'bookings', booking.id));
+              deletedCount++;
+              addLog(`تم حذف الحجز المعلق المكرر بنجاح.`);
+            } else {
+              addLog(`جاري مطابقة وربط الحجز المعلق بالمادة الجديدة المماثلة: "${matchingSlot.course_name}" تلقائياً...`);
+              
+              await updateDoc(doc(db, 'bookings', booking.id), {
+                slot_id: matchingSlot.id,
+                booked_hours: matchingSlot.duration_hours || booking.booked_hours || 2
+              });
+              
+              mappedCount++;
+              addLog(`تمت إعادة ربط الحجز بنجاح مع المعرّف الجديد (${matchingSlot.id})!`);
+            }
           } else {
             addLog(`لم نجد أي مادة مطابقة نشطة بالاسم: "${booking.course_name}". جاري تنظيف وحذف الحجز المعلق لحماية نصاب المراقب...`);
             await deleteDoc(doc(db, 'bookings', booking.id));
             deletedCount++;
             addLog(`تم حذف الحجز المعلق بنجاح.`);
+          }
+        } else if (associatedSlot.isDeleted) {
+          // Associated slot is soft-deleted
+          addLog(`عثرنا على حجز مرتبط بمادة محذوفة ناعماً: "${booking.course_name}" للمراقب: (${booking.student_name}).`);
+          
+          const activeMatchingSlot = allSlotsData.find(s => 
+            !s.isDeleted && 
+            s.course_name.trim().toLowerCase() === booking.course_name.trim().toLowerCase()
+          );
+
+          if (activeMatchingSlot) {
+            const alreadyHasBookingForActiveSlot = allBookingsData.some(b => 
+              b.student_id === booking.student_id && 
+              b.slot_id === activeMatchingSlot.id &&
+              b.id !== booking.id
+            );
+
+            if (alreadyHasBookingForActiveSlot) {
+              addLog(`الطالب لديه حجز جديد وفعال في نفس المادة المستعادة: "${activeMatchingSlot.course_name}". جاري حذف الحجز القديم المرتبط بالمادة المحذوفة ناعماً نهائياً...`);
+              await deleteDoc(doc(db, 'bookings', booking.id));
+              deletedCount++;
+              addLog(`تم حذف الحجز القديم بنجاح.`);
+            } else {
+              addLog(`جاري إعادة توجيه حجز الطالب للمادة المستعادة النشطة: "${activeMatchingSlot.course_name}" تلقائياً...`);
+              await updateDoc(doc(db, 'bookings', booking.id), {
+                slot_id: activeMatchingSlot.id,
+                booked_hours: activeMatchingSlot.duration_hours || booking.booked_hours || 2
+              });
+              mappedCount++;
+              addLog(`تم تحديث وربط الحجز بالمادة النشطة المستعادة بنجاح.`);
+            }
+          } else {
+            addLog(`المادة "${booking.course_name}" محذوفة ناعماً ولا توجد نسخة نشطة منها حالياً. سيتم تجاهل حجزها في الإحصائيات النشطة.`);
           }
         }
       }

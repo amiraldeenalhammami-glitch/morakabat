@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { collection, onSnapshot, query, where, doc, updateDoc, getDoc, deleteDoc, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { UserProfile, Booking, AppSettings } from '../types';
+import { UserProfile, Booking, AppSettings, ExamSlot } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
 import { Search, Mail, Phone, IdCard, Clock, Loader2, Edit2, Download, Trash2, ChevronDown, CheckCircle2, XCircle, MessageSquare, Save, Image as ImageIcon, Check, X } from 'lucide-react';
 import SecurityConfirmModal from '../components/SecurityConfirmModal';
@@ -68,6 +68,7 @@ export default function AdminStudents() {
   const [students, setStudents] = useState<UserProfile[]>([]);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [slots, setSlots] = useState<ExamSlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingHours, setEditingHours] = useState<{ uid: string, hours: number, mode: 'default' | 'manual' } | null>(null);
@@ -162,16 +163,30 @@ export default function AdminStudents() {
       handleFirestoreError(error, OperationType.GET, 'bookings');
     });
 
+    const unsubscribeSlots = onSnapshot(collection(db, 'exam_slots'), (snapshot) => {
+      setSlots(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExamSlot)));
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'exam_slots');
+    });
+
     return () => {
       unsubscribeStudents();
       unsubscribeBookings();
+      unsubscribeSlots();
     };
   }, [profile?.uid]);
+
+  const studentIds = new Set(students.map(s => s.uid));
+  const activeBookings = bookings.filter(b => {
+    const slot = slots.find(s => s.id === b.slot_id);
+    return slot && !slot.isDeleted;
+  });
+  const studentBookings = activeBookings.filter(b => studentIds.has(b.student_id));
 
   const handleDownloadCSV = () => {
     const headers = ['الاسم', 'الرقم الجامعي', 'القسم', 'البريد', 'الهاتف', 'الساعات المنجزة', 'الساعات المطلوبة'];
     const rows = students.map(s => {
-      const hours = bookings
+      const hours = activeBookings
         .filter(b => b.student_id === s.uid)
         .reduce((acc, curr) => acc + curr.booked_hours, 0);
       return [
@@ -223,7 +238,7 @@ export default function AdminStudents() {
       else if (statusType.includes('أمين قاعة')) statusType = 'أمين قاعة';
 
       // 2. Bookings for this student
-      const studentBookings = bookings.filter(b => b.student_id === s.uid);
+      const studentBookings = activeBookings.filter(b => b.student_id === s.uid);
       
       // 3. الساعات التي حجزها
       const bookedHours = studentBookings.reduce((sum, b) => sum + Math.abs(Number(b.booked_hours || 0)), 0);
@@ -455,8 +470,7 @@ export default function AdminStudents() {
     }
   };
 
-  const studentIds = new Set(students.map(s => s.uid));
-  const studentBookings = bookings.filter(b => studentIds.has(b.student_id));
+  // Note: studentIds and studentBookings are defined at the top level of the component
 
   const filteredStudents = students.filter(s => {
     const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 

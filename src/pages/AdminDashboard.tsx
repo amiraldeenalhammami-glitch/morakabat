@@ -21,7 +21,10 @@ export default function AdminDashboard() {
     if (!profile?.uid) return;
 
     const unsubscribeSlots = onSnapshot(collection(db, 'exam_slots'), (snapshot) => {
-      setSlots(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExamSlot)));
+      const activeSlots = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as ExamSlot))
+        .filter(s => !s.isDeleted);
+      setSlots(activeSlots);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'exam_slots');
     });
@@ -60,7 +63,7 @@ export default function AdminDashboard() {
 
   const totalRequiredInvigilators = slots.reduce((acc, curr) => acc + curr.required_invigilators, 0);
   const studentIds = new Set(students.map(s => s.uid));
-  const studentBookings = bookings.filter(b => studentIds.has(b.student_id));
+  const studentBookings = bookings.filter(b => studentIds.has(b.student_id) && slots.some(s => s.id === b.slot_id));
   const totalBookedSlots = studentBookings.length;
   const coveragePercentage = totalRequiredInvigilators > 0 
     ? Math.round((totalBookedSlots / totalRequiredInvigilators) * 100) 
