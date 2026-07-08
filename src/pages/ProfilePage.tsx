@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { User, Mail, Phone, IdCard, Building, Clock, Shield, Edit2, Save, X, Loader2, Camera, Image as ImageIcon, CheckCircle2, MessageSquare, XCircle } from 'lucide-react';
+import { User, Mail, Phone, IdCard, Building, Clock, Shield, Edit2, Save, X, Loader2, Camera, Image as ImageIcon, CheckCircle2, MessageSquare, XCircle, Lock } from 'lucide-react';
 import { doc, updateDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { AppSettings } from '../types';
@@ -21,6 +21,8 @@ export default function ProfilePage() {
     department: '',
   });
 
+  const isLockedForUser = globalSettings?.profiles_locked && profile?.role !== 'admin';
+
   useEffect(() => {
     if (profile && !isEditing) {
       setFormData({
@@ -31,6 +33,12 @@ export default function ProfilePage() {
       });
     }
   }, [profile, isEditing]);
+
+  useEffect(() => {
+    if (isLockedForUser && isEditing) {
+      setIsEditing(false);
+    }
+  }, [isLockedForUser, isEditing]);
 
   useEffect(() => {
     const unsubscribeSettings = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
@@ -96,7 +104,7 @@ export default function ProfilePage() {
           <h1 className="text-3xl font-bold text-slate-900">الملف الشخصي</h1>
           <p className="text-slate-500 mt-1">بياناتك الشخصية والجامعية المسجلة في النظام</p>
         </div>
-        {!isEditing ? (
+        {!isLockedForUser && (!isEditing ? (
           <button
             onClick={() => setIsEditing(true)}
             className="flex items-center gap-2 bg-indigo-50 text-indigo-600 px-6 py-3 rounded-2xl font-bold hover:bg-indigo-100 transition-colors"
@@ -127,8 +135,20 @@ export default function ProfilePage() {
               <span>إلغاء</span>
             </button>
           </div>
-        )}
+        ))}
       </header>
+
+      {isLockedForUser && (
+        <div className="bg-amber-50 border border-amber-200 p-6 rounded-3xl flex items-start gap-4 text-amber-900 shadow-sm animate-fade-in">
+          <div className="p-2 bg-white rounded-xl text-amber-600 shadow-sm border border-amber-100">
+            <Lock size={20} />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-amber-500 uppercase tracking-wider mb-1">حماية الحسابات</p>
+            <p className="font-medium text-slate-800">تم إغلاق تعديل البيانات من قبل الإدارة لاعتماد الحسابات</p>
+          </div>
+        </div>
+      )}
 
       {profile.admin_note && (
         <div className="bg-indigo-50 border border-indigo-100 p-6 rounded-3xl flex items-start gap-4 text-indigo-900 shadow-sm">

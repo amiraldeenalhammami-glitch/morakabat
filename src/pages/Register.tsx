@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { UserPlus, Mail, Lock, User, Phone, IdCard, Building, AlertCircle, Camera, Image as ImageIcon, CheckCircle, ChevronDown } from 'lucide-react';
 import { uploadToCloudinary } from '../utils/cloudinary';
@@ -26,7 +26,21 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  const [globalSettings, setGlobalSettings] = useState<any>(null);
+
+  useEffect(() => {
+    const unsubscribe = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
+      if (docSnap.exists()) {
+        setGlobalSettings(docSnap.data());
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const isLocked = globalSettings?.profiles_locked === true;
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isLocked) return;
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
@@ -147,23 +161,37 @@ export default function Register() {
         )}
 
         {!success ? (
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">الاسم الكامل</label>
-                <div className="relative">
-                  <User className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-                  <input
-                    name="name"
-                    type="text"
-                    required
-                    value={formData.name}
-                    onChange={handleChange}
-                    className="w-full pr-12 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                    placeholder="الاسم الثلاثي"
-                  />
+          <div className="space-y-6">
+            {isLocked && (
+              <div className="p-4 bg-amber-50 text-amber-900 border border-amber-200 rounded-2xl flex items-start gap-3 text-sm animate-fade-in">
+                <div className="p-1.5 bg-white rounded-lg text-amber-600 shadow-sm border border-amber-100">
+                  <Lock size={18} />
+                </div>
+                <div>
+                  <span className="font-bold block text-amber-800">التسجيل وتعديل البيانات مغلق</span>
+                  <p className="mt-1">تم إغلاق تعديل البيانات من قبل الإدارة لاعتماد الحسابات</p>
                 </div>
               </div>
+            )}
+            
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">الاسم الكامل</label>
+                  <div className="relative">
+                    <User className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                    <input
+                      name="name"
+                      type="text"
+                      required
+                      disabled={isLocked}
+                      value={formData.name}
+                      onChange={handleChange}
+                      className="w-full pr-12 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                      placeholder="الاسم الثلاثي"
+                    />
+                  </div>
+                </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">البريد الإلكتروني</label>
@@ -173,9 +201,10 @@ export default function Register() {
                     name="email"
                     type="email"
                     required
+                    disabled={isLocked}
                     value={formData.email}
                     onChange={handleChange}
-                    className="w-full pr-12 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                    className="w-full pr-12 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                     placeholder="example@univ.edu"
                   />
                 </div>
@@ -189,10 +218,11 @@ export default function Register() {
                     name="password"
                     type="password"
                     required
+                    disabled={isLocked}
                     minLength={6}
                     value={formData.password}
                     onChange={handleChange}
-                    className="w-full pr-12 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                    className="w-full pr-12 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                     placeholder="••••••••"
                   />
                 </div>
@@ -206,9 +236,10 @@ export default function Register() {
                     name="phone"
                     type="tel"
                     required
+                    disabled={isLocked}
                     value={formData.phone}
                     onChange={handleChange}
-                    className="w-full pr-12 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                    className="w-full pr-12 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                     placeholder="05xxxxxxxx"
                   />
                 </div>
@@ -222,9 +253,10 @@ export default function Register() {
                     name="university_id"
                     type="text"
                     required
+                    disabled={isLocked}
                     value={formData.university_id}
                     onChange={handleChange}
-                    className="w-full pr-12 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                    className="w-full pr-12 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                     placeholder="2024xxxx"
                   />
                 </div>
@@ -238,9 +270,10 @@ export default function Register() {
                     name="department"
                     type="text"
                     required
+                    disabled={isLocked}
                     value={formData.department}
                     onChange={handleChange}
-                    className="w-full pr-12 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                    className="w-full pr-12 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                     placeholder="علوم الحاسب"
                   />
                 </div>
@@ -251,23 +284,25 @@ export default function Register() {
                 <div className="grid grid-cols-2 gap-4">
                   <button
                     type="button"
+                    disabled={isLocked}
                     onClick={() => setFormData({ ...formData, requested_role: 'student' })}
                     className={`py-3 px-4 rounded-2xl border-2 transition-all font-bold text-sm ${
                       formData.requested_role === 'student'
                         ? 'border-indigo-600 bg-indigo-50 text-indigo-600'
                         : 'border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-200'
-                    }`}
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     مراقب
                   </button>
                   <button
                     type="button"
+                    disabled={isLocked}
                     onClick={() => setFormData({ ...formData, requested_role: 'admin' })}
                     className={`py-3 px-4 rounded-2xl border-2 transition-all font-bold text-sm ${
                       formData.requested_role === 'admin'
                         ? 'border-indigo-600 bg-indigo-50 text-indigo-600'
                         : 'border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-200'
-                    }`}
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     مدير
                   </button>
@@ -280,9 +315,10 @@ export default function Register() {
                   <div className="relative">
                     <select
                       name="observer_type"
+                      disabled={isLocked}
                       value={formData.observer_type}
                       onChange={(e) => setFormData({ ...formData, observer_type: e.target.value as any })}
-                      className="w-full pr-4 pl-10 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none text-slate-700 font-bold text-sm text-right"
+                      className="w-full pr-4 pl-10 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all appearance-none text-slate-700 font-bold text-sm text-right disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       <option value="طالب دراسات">طالب دراسات</option>
                       <option value="موظف">موظف</option>
@@ -299,7 +335,7 @@ export default function Register() {
               <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">الصورة الشخصية (اختياري)</label>
-                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:bg-slate-50 transition-all overflow-hidden relative">
+                  <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-2xl transition-all overflow-hidden relative ${isLocked ? 'cursor-not-allowed opacity-50 bg-slate-100' : 'cursor-pointer hover:bg-slate-50'}`}>
                     {profileImage ? (
                       <div className="flex flex-col items-center">
                         <CheckCircle size={24} className="text-emerald-500 mb-1" />
@@ -311,13 +347,13 @@ export default function Register() {
                         <span className="text-xs text-slate-400">اختر صورة</span>
                       </div>
                     )}
-                    <input type="file" className="hidden" accept="image/*" onChange={(e) => setProfileImage(e.target.files?.[0] || null)} />
+                    <input type="file" className="hidden" accept="image/*" disabled={isLocked} onChange={(e) => setProfileImage(e.target.files?.[0] || null)} />
                   </label>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">صورة البطاقة الجامعية (اختياري)</label>
-                  <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:bg-slate-50 transition-all overflow-hidden relative">
+                  <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-2xl transition-all overflow-hidden relative ${isLocked ? 'cursor-not-allowed opacity-50 bg-slate-100' : 'cursor-pointer hover:bg-slate-50'}`}>
                     {idCardImage ? (
                       <div className="flex flex-col items-center">
                         <CheckCircle size={24} className="text-emerald-500 mb-1" />
@@ -329,7 +365,7 @@ export default function Register() {
                         <span className="text-xs text-slate-400">اختر صورة</span>
                       </div>
                     )}
-                    <input type="file" className="hidden" accept="image/*" onChange={(e) => setIdCardImage(e.target.files?.[0] || null)} />
+                    <input type="file" className="hidden" accept="image/*" disabled={isLocked} onChange={(e) => setIdCardImage(e.target.files?.[0] || null)} />
                   </label>
                 </div>
               </div>
@@ -337,8 +373,8 @@ export default function Register() {
 
             <button
               type="submit"
-              disabled={loading}
-              className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              disabled={loading || isLocked}
+              className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -350,6 +386,7 @@ export default function Register() {
               )}
             </button>
           </form>
+          </div>
         ) : (
           <div className="text-center py-8">
             <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">

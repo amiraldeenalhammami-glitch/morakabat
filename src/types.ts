@@ -86,6 +86,7 @@ export interface AppSettings {
   app_logo_url?: string;
   reset_password?: string;
   security_code?: string;
+  profiles_locked?: boolean;
 }
 
 export interface GroupNote {

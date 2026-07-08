@@ -32,16 +32,16 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() &&
-        (request.auth.token.email == "amiraldeenalhammami@ab3adacademy.com" || 
-         request.auth.uid == "44tKjSuzLiM8bjP5Ot4a51sQuH33" ||
+        (request.auth.uid == "44tKjSuzLiM8bjP5Ot4a51sQuH33" ||
+         (request.auth.token != null && 'email' in request.auth.token && request.auth.token.email == "amiraldeenalhammami@ab3adacademy.com") ||
          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
     }
 
     function isSuperAdmin() {
       return isAuthenticated() &&
-        (request.auth.token.email == "amiraldeenalhammami@ab3adacademy.com" || 
-         request.auth.uid == "44tKjSuzLiM8bjP5Ot4a51sQuH33");
+        (request.auth.uid == "44tKjSuzLiM8bjP5Ot4a51sQuH33" ||
+         (request.auth.token != null && 'email' in request.auth.token && request.auth.token.email == "amiraldeenalhammami@ab3adacademy.com"));
     }
 
     function isValidUser(data) {
@@ -65,8 +65,15 @@ service cloud.firestore {
     }
 
     function isValidSettings(data) {
-      return data.registration_open is bool &&
-             (data.default_required_hours is number || !('default_required_hours' in data));
+      return (!('registration_open' in data) || data.registration_open is bool) &&
+             (!('default_required_hours' in data) || data.default_required_hours is number);
+    }
+
+    function areProfilesLocked() {
+      let settingsPath = /databases/$(database)/documents/settings/global;
+      return exists(settingsPath) && 
+             ('profiles_locked' in get(settingsPath).data) && 
+             get(settingsPath).data.profiles_locked == true;
     }
 
     function isValidGroupNote(data) {
@@ -91,7 +98,8 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && userId == request.auth.uid && request.resource.data.role == 'student';
       allow update: if isAuthenticated() && (userId == request.auth.uid || isAdmin()) && 
-                    (request.resource.data.role == resource.data.role || isSuperAdmin());
+                    (request.resource.data.role == resource.data.role || isSuperAdmin()) &&
+                    (!areProfilesLocked() || isAdmin() || userId != request.auth.uid);
       allow delete: if isAdmin();
     }
 

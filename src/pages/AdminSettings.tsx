@@ -4,7 +4,7 @@ import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { AppSettings } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
-import { Settings, Save, AlertCircle, CheckCircle, Loader2, Image as ImageIcon, Camera, Shield, UserMinus, UserPlus } from 'lucide-react';
+import { Settings, Save, AlertCircle, CheckCircle, Loader2, Image as ImageIcon, Camera, Shield, UserMinus, UserPlus, Lock, Unlock } from 'lucide-react';
 import { uploadToCloudinary } from '../utils/cloudinary';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 
@@ -22,6 +22,7 @@ export default function AdminSettings() {
     app_logo_url: '',
     reset_password: '',
     security_code: '',
+    profiles_locked: false,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -44,6 +45,7 @@ export default function AdminSettings() {
           app_logo_url: data.app_logo_url ?? '',
           reset_password: data.reset_password ?? '',
           security_code: data.security_code ?? '',
+          profiles_locked: data.profiles_locked ?? false,
         });
       }
       setLoading(false);
@@ -288,6 +290,37 @@ export default function AdminSettings() {
               className={`
                 inline-block h-6 w-6 transform rounded-full bg-white transition-transform
                 ${settings.registration_open ? '-translate-x-7' : '-translate-x-1'}
+              `}
+            />
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-white rounded-xl shadow-sm">
+              {settings.profiles_locked ? (
+                <Lock className="text-red-600" size={24} />
+              ) : (
+                <Unlock className="text-emerald-600" size={24} />
+              )}
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-900">قفل تعديل البيانات الشخصية</h3>
+              <p className="text-sm text-slate-500">قفل الاسم، الصورة، بطاقة الجامعة والبيانات المعتمدة للمراقبين</p>
+            </div>
+          </div>
+          <button
+            id="profiles-locked-toggle"
+            onClick={() => setSettings({ ...settings, profiles_locked: !settings.profiles_locked })}
+            className={`
+              relative inline-flex h-8 w-14 items-center rounded-full transition-colors focus:outline-none
+              ${settings.profiles_locked ? 'bg-red-600' : 'bg-slate-300'}
+            `}
+          >
+            <span
+              className={`
+                inline-block h-6 w-6 transform rounded-full bg-white transition-transform
+                ${settings.profiles_locked ? '-translate-x-7' : '-translate-x-1'}
               `}
             />
           </button>
