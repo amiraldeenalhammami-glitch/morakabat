@@ -409,24 +409,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="bg-indigo-600 rounded-3xl p-8 text-white flex flex-col md:flex-row justify-between items-center gap-6">
-        <div>
-          <h2 className="text-2xl font-bold">إجراءات سريعة</h2>
-          <p className="text-indigo-100 mt-1">إدارة النظام والمراقبين والبرنامج الامتحاني من مكان واحد</p>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <Link to="/admin/slots" className="px-6 py-3 bg-white text-indigo-600 rounded-2xl font-bold hover:bg-indigo-50 transition-colors">
-            إدارة البرنامج
-          </Link>
-          <Link to="/admin/students" className="px-6 py-3 bg-indigo-500 text-white rounded-2xl font-bold hover:bg-indigo-400 transition-colors">
-            إدارة المراقبين
-          </Link>
-          <Link to="/admin/settings" className="px-6 py-3 bg-indigo-700 text-white rounded-2xl font-bold hover:bg-indigo-800 transition-colors">
-            الإعدادات العامة
-          </Link>
-        </div>
-      </div>
+
 
       {/* ==================== THIRD: PROCTORS ANALYTICS & REPORTS (Part 3) ==================== */}
       <div className="space-y-4">
@@ -750,6 +733,25 @@ export default function AdminDashboard() {
               <div className="p-12 text-center text-slate-500">لا يوجد مراقبون مسجلون بعد.</div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="bg-indigo-600 rounded-3xl p-8 text-white flex flex-col md:flex-row justify-between items-center gap-6">
+        <div>
+          <h2 className="text-2xl font-bold">إجراءات سريعة</h2>
+          <p className="text-indigo-100 mt-1">إدارة النظام والمراقبين والبرنامج الامتحاني من مكان واحد</p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <Link to="/admin/slots" className="px-6 py-3 bg-white text-indigo-600 rounded-2xl font-bold hover:bg-indigo-50 transition-colors">
+            إدارة البرنامج
+          </Link>
+          <Link to="/admin/students" className="px-6 py-3 bg-indigo-500 text-white rounded-2xl font-bold hover:bg-indigo-400 transition-colors">
+            إدارة المراقبين
+          </Link>
+          <Link to="/admin/settings" className="px-6 py-3 bg-indigo-700 text-white rounded-2xl font-bold hover:bg-indigo-800 transition-colors">
+            الإعدادات العامة
+          </Link>
         </div>
       </div>
     </div>
