@@ -185,7 +185,8 @@ export default function AdminStudents() {
 
   const handleDownloadCSV = () => {
     const headers = ['الاسم', 'الرقم الجامعي', 'القسم', 'البريد', 'الهاتف', 'الساعات المنجزة', 'الساعات المطلوبة'];
-    const rows = students.map(s => {
+    const sortedStudents = [...students].sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+    const rows = sortedStudents.map(s => {
       const hours = activeBookings
         .filter(b => b.student_id === s.uid)
         .reduce((acc, curr) => acc + curr.booked_hours, 0);
@@ -484,7 +485,7 @@ export default function AdminStudents() {
       matchesTab = s.status === 'frozen';
     }
     return matchesSearch && matchesTab;
-  });
+  }).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
 
   if (loading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="animate-spin text-indigo-600" size={40} /></div>;
