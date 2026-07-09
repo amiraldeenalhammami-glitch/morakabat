@@ -59,6 +59,8 @@ export interface ExamSlot {
   expansions_from?: number;
   expansions_to?: number;
   room_ranges?: RoomRange[];
+  student_distribution?: { student_name: string; room: string }[];
+  exam_results?: StudentExamResult[];
 }
 
 export interface Booking {
@@ -92,6 +94,21 @@ export interface AppSettings {
   trim_hours_target?: number | null;
   trim_hours_started_at?: string | null;
   trim_hours_processed?: boolean;
+  show_public_schedule?: boolean;
+  show_public_results?: boolean;
+  global_settings_version?: number;
+  developer_fb_link?: string;
+  distribution_unlock_hours?: number;
+}
+
+export interface StudentExamResult {
+  student_name: string;
+  exam_number: string;
+  course_name: string;
+  practical_grade: number;
+  theory_grade: number;
+  final_score: number;
+  status: string; // 'ناجح' | 'راسب'
 }
 
 export interface GroupNote {

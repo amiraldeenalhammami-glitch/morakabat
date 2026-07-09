@@ -64,7 +64,7 @@ const AdminNoteInput = ({
 };
 
 export default function AdminStudents() {
-  const { profile, isSuperAdmin } = useAuth();
+  const { user, profile, isSuperAdmin } = useAuth();
   const [students, setStudents] = useState<UserProfile[]>([]);
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -101,7 +101,7 @@ export default function AdminStudents() {
   };
 
   useEffect(() => {
-    if (!profile?.uid) return;
+    if (!user?.uid) return;
 
     // Listen to group_notes in real-time
     const unsubscribeGroupNotes = onSnapshot(collection(db, 'group_notes'), (snapshot) => {
@@ -121,10 +121,10 @@ export default function AdminStudents() {
     });
 
     return () => unsubscribeGroupNotes();
-  }, [profile?.uid]);
+  }, [user?.uid]);
 
   useEffect(() => {
-    if (!profile?.uid) return;
+    if (!user?.uid) return;
 
     const unsubscribeSettings = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
       if (docSnap.exists()) {
@@ -143,10 +143,10 @@ export default function AdminStudents() {
     });
 
     return () => unsubscribeSettings();
-  }, [profile?.uid]);
+  }, [user?.uid]);
 
   useEffect(() => {
-    if (!profile?.uid) return;
+    if (!user?.uid) return;
 
     const unsubscribeStudents = onSnapshot(query(collection(db, 'users')), (snapshot) => {
       const users = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserProfile));
@@ -174,7 +174,7 @@ export default function AdminStudents() {
       unsubscribeBookings();
       unsubscribeSlots();
     };
-  }, [profile?.uid]);
+  }, [user?.uid]);
 
   const studentIds = new Set(students.map(s => s.uid));
   const activeBookings = bookings.filter(b => {

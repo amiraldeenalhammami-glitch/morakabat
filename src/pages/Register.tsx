@@ -6,8 +6,12 @@ import { auth, db } from '../firebase';
 import { UserPlus, Mail, Lock, User, Phone, IdCard, Building, AlertCircle, Camera, Image as ImageIcon, CheckCircle, ChevronDown } from 'lucide-react';
 import { uploadToCloudinary } from '../utils/cloudinary';
 import { Logo } from '../components/Logo';
+import { DeveloperFooter } from '../components/DeveloperFooter';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Register() {
+  const { user, isAdmin } = useAuth();
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -17,14 +21,26 @@ export default function Register() {
     department: '',
     requested_role: 'student' as 'student' | 'admin',
     observer_type: 'طالب دراسات' as 'طالب دراسات' | 'موظف' | 'أمين قاعة' | 'دكتور مشرف',
+    activation_code: '',
   });
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      if (isAdmin) {
+        navigate('/admin', { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
+      }
+    }
+  }, [user, isAdmin, navigate]);
+
   const [profileImage, setProfileImage] = useState<File | null>(null);
   const [idCardImage, setIdCardImage] = useState<File | null>(null);
   const [error, setError] = useState('');
   const [isEmailInUse, setIsEmailInUse] = useState(false);
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
 
   const [globalSettings, setGlobalSettings] = useState<any>(null);
 
@@ -52,6 +68,23 @@ export default function Register() {
 
     if (formData.password.length < 6) {
       setError('يجب أن تكون كلمة المرور 6 أحرف على الأقل');
+      return;
+    }
+
+    if (!profileImage) {
+      setError('الصورة الشخصية مطلوبة لإتمام عملية التسجيل.');
+      return;
+    }
+
+    if (!idCardImage) {
+      setError('صورة البطاقة الجامعية أو الوظيفية مطلوبة لإتمام عملية التسجيل.');
+      return;
+    }
+
+    const expectedCode = (globalSettings?.security_code || '').trim();
+    const enteredCode = (formData.activation_code || '').trim();
+    if (!enteredCode || enteredCode !== expectedCode) {
+      setError('كود تفعيل حساب المشرف غير صحيح. يرجى الحصول عليه من إدارة الكلية لتتمكن من إنشاء الحساب.');
       return;
     }
 
@@ -279,6 +312,24 @@ export default function Register() {
                 </div>
               </div>
 
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-slate-700 mb-2">كود تفعيل حساب المشرف / المراقب</label>
+                <div className="relative">
+                  <Lock className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                  <input
+                    name="activation_code"
+                    type="text"
+                    required
+                    disabled={isLocked}
+                    value={formData.activation_code}
+                    onChange={handleChange}
+                    className="w-full pr-12 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all disabled:opacity-60 disabled:cursor-not-allowed font-sans"
+                    placeholder="أدخل كود التفعيل المعتمد من قبل الإدارة..."
+                  />
+                </div>
+                <p className="text-xs text-slate-400 mt-1">يجب الحصول على هذا الكود من إدارة الكلية لتفعيل وإتمام عملية تسجيل حسابك.</p>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">نوع الحساب المطلوب</label>
                 <div className="grid grid-cols-2 gap-4">
@@ -334,7 +385,7 @@ export default function Register() {
 
               <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-100">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">الصورة الشخصية (اختياري)</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">الصورة الشخصية (إجباري)</label>
                   <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-2xl transition-all overflow-hidden relative ${isLocked ? 'cursor-not-allowed opacity-50 bg-slate-100' : 'cursor-pointer hover:bg-slate-50'}`}>
                     {profileImage ? (
                       <div className="flex flex-col items-center">
@@ -352,7 +403,7 @@ export default function Register() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">صورة البطاقة الجامعية (اختياري)</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">صورة البطاقة الجامعية أو الوظيفية (إجباري)</label>
                   <label className={`flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-2xl transition-all overflow-hidden relative ${isLocked ? 'cursor-not-allowed opacity-50 bg-slate-100' : 'cursor-pointer hover:bg-slate-50'}`}>
                     {idCardImage ? (
                       <div className="flex flex-col items-center">
@@ -407,19 +458,7 @@ export default function Register() {
           </Link>
         </p>
 
-        <div className="mt-8 pt-6 border-t text-center">
-          <p className="text-[10px] text-slate-400">
-            صمم هذا التطبيق بواسطة{' '}
-            <a 
-              href="https://www.facebook.com/amir.aldeen.alhammami/?locale=ar_AR" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-indigo-500 hover:underline font-medium"
-            >
-              م.أمير الدين الحمامي
-            </a>
-          </p>
-        </div>
+        <DeveloperFooter className="mt-8 pt-6 border-t" />
       </div>
     </div>
   );

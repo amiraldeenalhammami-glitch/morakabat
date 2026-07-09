@@ -10,7 +10,7 @@ import { usePWA } from '../hooks/usePWA';
 import { getSlotRooms, getObserverRoom } from '../utils/roomUtils';
 
 export default function AdminDashboard() {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const [slots, setSlots] = useState<ExamSlot[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [students, setStudents] = useState<UserProfile[]>([]);
@@ -20,7 +20,7 @@ export default function AdminDashboard() {
   const [activeReportTab, setActiveReportTab] = useState<'completed' | 'partial' | 'inactive' | null>(null);
 
   useEffect(() => {
-    if (!profile?.uid) return;
+    if (!user?.uid) return;
 
     const unsubscribeSlots = onSnapshot(collection(db, 'exam_slots'), (snapshot) => {
       const activeSlots = snapshot.docs
@@ -61,7 +61,7 @@ export default function AdminDashboard() {
       unsubscribeStudents();
       unsubscribeSettings();
     };
-  }, [profile?.uid]);
+  }, [user?.uid]);
 
   const studentIds = new Set(students.map(s => s.uid));
   const studentBookings = bookings.filter(b => studentIds.has(b.student_id) && slots.some(s => s.id === b.slot_id));
@@ -134,6 +134,8 @@ export default function AdminDashboard() {
   let totalSlotHours = 0;
   slots.forEach(s => {
     try {
+      const roomsCount = getSlotRooms(s).length;
+      const observersPerRoom = s.observers_per_room !== undefined ? Number(s.observers_per_room) : 3;
       const durationHours = s.duration_hours !== undefined 
         ? Number(s.duration_hours) 
         : (() => {
@@ -143,17 +145,13 @@ export default function AdminDashboard() {
             const endMin = parseInt(end[0]) * 60 + parseInt(end[1]);
             return Math.max(1, Math.round((endMin - startMin) / 60));
           })();
-      totalSlotHours += (s.required_invigilators * durationHours);
+      totalSlotHours += (roomsCount * observersPerRoom * durationHours);
     } catch (e) {
       totalSlotHours += (s.required_invigilators * 2);
     }
   });
 
-  const activeStudentsList = students.filter(s => s.status === 'active');
-  const bookedStudentIds = new Set(bookings.map(b => b.student_id).filter(Boolean));
-  const finalActiveStudents = activeStudentsList.length > 0 
-    ? activeStudentsList 
-    : Array.from(bookedStudentIds).map(id => ({ uid: id, status: 'active' } as UserProfile));
+  const finalActiveStudents = students.filter(s => s.status === 'active');
   const finalActiveStudentIds = new Set(finalActiveStudents.map(s => s.uid));
   const activeObserversCount = finalActiveStudents.length;
 
@@ -176,10 +174,13 @@ export default function AdminDashboard() {
   const partiallyCoveredProctors: { profile: UserProfile; bookedHours: number; remainingHours: number; bookings: Booking[] }[] = [];
   const inactiveProctors: UserProfile[] = [];
 
-  students.forEach(student => {
+  finalActiveStudents.forEach(student => {
     const studentHours = bookings
       .filter(b => b.student_id === student.uid && activeSlotIds.has(b.slot_id))
-      .reduce((acc, curr) => acc + curr.booked_hours, 0);
+      .reduce((acc, curr) => {
+        const h = curr.booked_hours !== undefined ? Math.abs(Number(curr.booked_hours)) : 2;
+        return acc + (isNaN(h) ? 2 : h);
+      }, 0);
 
     const required = student.required_hours_mode === 'manual' 
       ? (student.required_hours ?? 16) 
@@ -195,7 +196,7 @@ export default function AdminDashboard() {
         bookedHours: studentHours,
         bookings: proctorBookings
       });
-    } else {
+    } else if (studentHours > 0 && studentHours < required) {
       partiallyCoveredProctors.push({
         profile: student,
         bookedHours: studentHours,

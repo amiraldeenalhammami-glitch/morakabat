@@ -6,6 +6,7 @@ import { LogOut, User, LayoutDashboard, Calendar, Users, Settings, Menu, X, Down
 import { Logo } from './Logo';
 import { usePWA } from '../hooks/usePWA';
 import { checkAndRunTrimming } from '../utils/trimming';
+import { DeveloperFooter } from './DeveloperFooter';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { profile, isAdmin } = useAuth();
@@ -20,7 +21,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   const handleLogout = async () => {
     await auth.signOut();
-    navigate('/login');
+    navigate('/');
   };
 
   const navItems = isAdmin 
@@ -131,19 +132,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             <span>تسجيل الخروج</span>
           </button>
           
-          <div className="mt-4 pt-4 border-t text-center">
-            <p className="text-[10px] text-slate-400">
-              صمم هذا التطبيق بواسطة{' '}
-              <a 
-                href="https://www.facebook.com/amir.aldeen.alhammami/?locale=ar_AR" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-indigo-500 hover:underline font-medium"
-              >
-                م.أمير الدين الحمامي
-              </a>
-            </p>
-          </div>
+          <DeveloperFooter className="mt-4 pt-4 border-t" />
         </div>
       </aside>
 

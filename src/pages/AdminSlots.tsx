@@ -4,13 +4,16 @@ import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { ExamSlot, Booking, AppSettings, UserProfile, RoomRange } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
-import { Plus, Trash2, Edit2, X, Check, Calendar, Clock, MapPin, Users, Loader2, User, Download, Shield, AlertCircle, Sparkles, Upload, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Edit2, X, Check, Calendar, Clock, MapPin, Users, Loader2, User, Download, Shield, AlertCircle, Sparkles, Upload, ChevronDown, HelpCircle } from 'lucide-react';
 import SecurityConfirmModal from '../components/SecurityConfirmModal';
 import { getSlotRooms, getObserverRoom } from '../utils/roomUtils';
 import { parseCSVToSlots } from '../utils/csvParser';
+import { parseCSVToStudentDistribution } from '../utils/studentDistributionParser';
+import { parseCSVToStudentResults } from '../utils/studentResultsParser';
+import { compileAndPublishSchedule } from '../utils/publicSchedule';
 
 export default function AdminSlots() {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const [slots, setSlots] = useState<ExamSlot[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [students, setStudents] = useState<UserProfile[]>([]);
@@ -29,10 +32,20 @@ export default function AdminSlots() {
 
   // CSV Upload States
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [instructionModalOpen, setInstructionModalOpen] = useState(false);
+  const [instructionType, setInstructionType] = useState<'distribution' | 'results'>('distribution');
+  const [instructionSlotId, setInstructionSlotId] = useState<string | null>(null);
   const [parsedSlots, setParsedSlots] = useState<any[]>([]);
   const [importLoading, setImportLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
+
+  // Preview / Analysis states for distribution & results
+  const [parsedDistribution, setParsedDistribution] = useState<{ student_name: string; room: string }[]>([]);
+  const [parsedResults, setParsedResults] = useState<any[]>([]);
+  const [previewFileName, setPreviewFileName] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewSuccess, setPreviewSuccess] = useState<string | null>(null);
 
   // Security confirmation states
   const [securityModalOpen, setSecurityModalOpen] = useState(false);
@@ -76,7 +89,7 @@ export default function AdminSlots() {
   });
 
   useEffect(() => {
-    if (!profile?.uid) return;
+    if (!user?.uid) return;
 
     const unsubscribeSlots = onSnapshot(collection(db, 'exam_slots'), (snapshot) => {
       setSlots(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ExamSlot)));
@@ -105,7 +118,7 @@ export default function AdminSlots() {
       unsubscribeBookings();
       unsubscribeUsers();
     };
-  }, [profile?.uid]);
+  }, [user?.uid]);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -349,6 +362,11 @@ export default function AdminSlots() {
           });
         }
       }
+      try {
+        await compileAndPublishSchedule();
+      } catch (compileErr) {
+        console.error("Failed to auto-compile schedule:", compileErr);
+      }
       setIsModalOpen(false);
       setEditingSlot(null);
       resetForm();
@@ -427,9 +445,185 @@ export default function AdminSlots() {
     document.body.removeChild(link);
   };
 
+  const readCSVFile = (file: File, callback: (text: string) => void) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const arrayBuffer = event.target?.result as ArrayBuffer;
+        if (!arrayBuffer) {
+          setPreviewError('فشل في قراءة محتوى الملف.');
+          return;
+        }
+        let text = '';
+        try {
+          const decoder = new TextDecoder('utf-8', { fatal: true });
+          text = decoder.decode(arrayBuffer);
+        } catch (utf8Error) {
+          try {
+            const decoder = new TextDecoder('windows-1256');
+            text = decoder.decode(arrayBuffer);
+          } catch (winError) {
+            const decoder = new TextDecoder('utf-8');
+            text = decoder.decode(arrayBuffer);
+          }
+        }
+        callback(text);
+      } catch (err) {
+        console.error(err);
+        setPreviewError('حدث خطأ أثناء معالجة الملف.');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleCancelPreview = () => {
+    setParsedDistribution([]);
+    setParsedResults([]);
+    setPreviewFileName(null);
+    setPreviewSuccess(null);
+    setPreviewError(null);
+  };
+
+  const handlePreviewStudentDistribution = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setPreviewFileName(file.name);
+    setPreviewError(null);
+    setPreviewSuccess(null);
+    setParsedDistribution([]);
+
+    readCSVFile(file, (text) => {
+      if (!text.trim()) {
+        setPreviewError('الملف فارغ أو غير صالح.');
+        return;
+      }
+      const list = parseCSVToStudentDistribution(text);
+      if (list.length === 0) {
+        setPreviewError('لم يتم العثور على بيانات توزيع الطلاب صالحة في ملف CSV. يرجى التأكد من أن الملف بصيغة CSV ويحتوي على الأعمدة المطلوبة.');
+      } else {
+        setParsedDistribution(list);
+        setPreviewSuccess(`تم قراءة وتحليل ${list.length} سجل لتوزيع الطلاب بنجاح! جاهز للحفظ والتحليل.`);
+      }
+    });
+    e.target.value = '';
+  };
+
+  const handleSaveStudentDistribution = async () => {
+    if (!instructionSlotId || parsedDistribution.length === 0) return;
+    setImportLoading(true);
+    try {
+      await updateDoc(doc(db, 'exam_slots', instructionSlotId), {
+        student_distribution: parsedDistribution
+      });
+      alert(`تم رفع وحفظ توزيع قاعات الطلاب لـ ${parsedDistribution.length} طالب بنجاح!`);
+      setInstructionModalOpen(false);
+      setParsedDistribution([]);
+      setPreviewFileName(null);
+      setPreviewSuccess(null);
+    } catch (err: any) {
+      alert('حدث خطأ أثناء حفظ توزيع الطلاب: ' + err.message);
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const handleClearStudentDistribution = async (slotId: string) => {
+    requestSecurityConfirm(
+      async () => {
+        try {
+          await updateDoc(doc(db, 'exam_slots', slotId), {
+            student_distribution: []
+          });
+          alert('تم حذف توزيع الطلاب لهذه المادة بنجاح.');
+        } catch (err: any) {
+          alert('فشل في حذف توزيع الطلاب: ' + err.message);
+        }
+      },
+      'حذف توزيع قاعات الطلاب',
+      'يرجى إدخال كلمة المرور الموحدة المعتمدة من السوبر أدمن لتأكيد حذف جدول توزيع الطلاب.'
+    );
+  };
+
+  const handlePreviewStudentResults = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setPreviewFileName(file.name);
+    setPreviewError(null);
+    setPreviewSuccess(null);
+    setParsedResults([]);
+
+    readCSVFile(file, (text) => {
+      if (!text.trim()) {
+        setPreviewError('الملف فارغ أو غير صالح.');
+        return;
+      }
+      const list = parseCSVToStudentResults(text);
+      if (list.length === 0) {
+        setPreviewError('لم يتم العثور على بيانات نتائج طلاب صالحة في ملف CSV. يرجى التحقق من الأعمدة المطلوبة.');
+      } else {
+        setParsedResults(list);
+        setPreviewSuccess(`تم قراءة وتحليل ${list.length} سجل للعلامات والنتائج بنجاح! جاهز للترفيع والتحليل.`);
+      }
+    });
+    e.target.value = '';
+  };
+
+  const handleSaveStudentResults = async () => {
+    if (!instructionSlotId || parsedResults.length === 0) return;
+    setImportLoading(true);
+    try {
+      await updateDoc(doc(db, 'exam_slots', instructionSlotId), {
+        exam_results: parsedResults
+      });
+      try {
+        await compileAndPublishSchedule();
+      } catch (compileErr) {
+        console.error("Failed to auto-compile schedule after results save:", compileErr);
+      }
+      alert(`تم ترفيع وحفظ نتائج ${parsedResults.length} طالب بنجاح!`);
+      setInstructionModalOpen(false);
+      setParsedResults([]);
+      setPreviewFileName(null);
+      setPreviewSuccess(null);
+    } catch (err: any) {
+      alert('حدث خطأ أثناء حفظ النتائج: ' + err.message);
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  const handleClearStudentResults = async (slotId: string) => {
+    requestSecurityConfirm(
+      async () => {
+        try {
+          await updateDoc(doc(db, 'exam_slots', slotId), {
+            exam_results: []
+          });
+          try {
+            await compileAndPublishSchedule();
+          } catch (compileErr) {
+            console.error("Failed to auto-compile schedule after results clear:", compileErr);
+          }
+          alert('تم حذف نتائج الطلاب لهذه المادة بنجاح.');
+        } catch (err: any) {
+          alert('فشل في حذف نتائج الطلاب: ' + err.message);
+        }
+      },
+      'حذف نتائج وعلامات الطلاب',
+      'يرجى إدخال كلمة المرور الموحدة المعتمدة من السوبر أدمن لتأكيد حذف جدول علامات ونتائج الطلاب.'
+    );
+  };
+
   const handleDelete = async (id: string) => {
     try {
       await updateDoc(doc(db, 'exam_slots', id), { isDeleted: true });
+      try {
+        await compileAndPublishSchedule();
+      } catch (compileErr) {
+        console.error("Failed to auto-compile schedule after delete:", compileErr);
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `exam_slots/${id}`);
     }
@@ -446,6 +640,11 @@ export default function AdminSlots() {
       }
       for (const booking of bookings) {
         await deleteDoc(doc(db, 'bookings', booking.id));
+      }
+      try {
+        await compileAndPublishSchedule();
+      } catch (compileErr) {
+        console.error("Failed to auto-compile schedule after clear:", compileErr);
       }
       alert('تم تصفير البرنامج بنجاح');
     } catch (err) {
@@ -600,6 +799,11 @@ export default function AdminSlots() {
           });
         }
       }
+      try {
+        await compileAndPublishSchedule();
+      } catch (compileErr) {
+        console.error("Failed to auto-compile schedule after import:", compileErr);
+      }
       alert(`تم استيراد ${parsedSlots.length} فترة امتحانية بنجاح!`);
       setIsUploadModalOpen(false);
       setParsedSlots([]);
@@ -706,10 +910,12 @@ export default function AdminSlots() {
   };
 
   const handleCompleteProgram = () => {
-    // 1. Calculate Total Slot Hours (sum of: required_invigilators * slot_duration_in_hours for each slot)
+    // 1. Calculate Total Slot Hours (sum of: rooms_count * observers_per_room * slot_duration_in_hours for each slot)
     let totalSlotHours = 0;
     slots.filter(s => !s.isDeleted).forEach(s => {
       try {
+        const roomsCount = getSlotRooms(s).length;
+        const observersPerRoom = s.observers_per_room !== undefined ? Number(s.observers_per_room) : 3;
         const durationHours = s.duration_hours !== undefined 
           ? Number(s.duration_hours) 
           : (() => {
@@ -719,20 +925,14 @@ export default function AdminSlots() {
               const endMin = parseInt(end[0]) * 60 + parseInt(end[1]);
               return Math.max(1, Math.round((endMin - startMin) / 60));
             })();
-        totalSlotHours += (s.required_invigilators * durationHours);
+        totalSlotHours += (roomsCount * observersPerRoom * durationHours);
       } catch (e) {
         totalSlotHours += (s.required_invigilators * 2); // fallback to 2 hours
       }
     });
 
     // 2. Calculate Active Observers list and count correctly
-    const activeStudentsList = students.filter(s => s.status === 'active');
-    const bookedStudentIds = new Set(bookings.map(b => b.student_id).filter(Boolean));
-    
-    // Determine active observers: students with active status, or fallback to booked student ids if students list is empty
-    const finalActiveStudents = activeStudentsList.length > 0 
-      ? activeStudentsList 
-      : Array.from(bookedStudentIds).map(id => ({ uid: id, status: 'active' } as UserProfile));
+    const finalActiveStudents = students.filter(s => s.status === 'active');
       
     const finalActiveStudentIds = new Set(finalActiveStudents.map(s => s.uid));
     const activeObserversCount = finalActiveStudents.length;
@@ -936,6 +1136,13 @@ export default function AdminSlots() {
                                       >
                                         {expandedSlotRooms === slot.id ? 'إخفاء التفاصيل' : 'تفاصيل القاعات والحضور ☰'}
                                       </button>
+                                      <button
+                                        onClick={() => setExpandedSlotRooms(expandedSlotRooms === slot.id ? null : slot.id)}
+                                        className="inline-flex items-center justify-center w-6 h-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-[11px] font-black transition-all shadow-xs"
+                                        title="عرض توزيع القاعات وتفاصيل المادة الامتحانية"
+                                      >
+                                        ت
+                                      </button>
                                     </div>
                                   </td>
                                   <td className="px-6 py-4">
@@ -1070,15 +1277,78 @@ export default function AdminSlots() {
                                           </table>
                                         </div>
 
-                                        {/* Download button below table */}
-                                        <div className="flex justify-start">
+                                        {/* Download & Upload Actions */}
+                                        <div className="flex flex-wrap items-center gap-3">
+                                          {/* Observers Roster */}
                                           <button
                                             onClick={() => handleDownloadSlotCSV(slot)}
                                             className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold px-4 py-2.5 rounded-2xl text-xs flex items-center gap-2 transition-all border border-indigo-100 shadow-xs"
                                           >
                                             <Download size={14} />
-                                            <span>تنزيل جدول الحضور والتوزيع (Excel)</span>
+                                            <span>تنزيل حضور وتوزيع المراقبين (Excel)</span>
                                           </button>
+
+                                          {/* Student Hall Distribution */}
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              handleCancelPreview();
+                                              setInstructionType('distribution');
+                                              setInstructionSlotId(slot.id);
+                                              setInstructionModalOpen(true);
+                                            }}
+                                            className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-100 rounded-2xl px-4 py-2.5 text-xs font-bold shadow-xs transition-all"
+                                            title="عرض إرشادات ورفع جدول توزيع قاعات الطلاب"
+                                          >
+                                            <Upload size={14} />
+                                            <span>رفع جدول توزيع قاعات الطلاب (CSV)</span>
+                                          </button>
+
+                                          {slot.student_distribution && slot.student_distribution.length > 0 && (
+                                            <div className="flex items-center gap-2 inline-flex bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-2xl">
+                                              <span className="text-[11px] text-emerald-800 font-extrabold">
+                                                ✅ تم رفع توزيع الطلاب ({slot.student_distribution.length} طالب)
+                                              </span>
+                                              <button
+                                                onClick={() => handleClearStudentDistribution(slot.id)}
+                                                className="p-1 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+                                                title="حذف توزيع الطلاب"
+                                              >
+                                                <Trash2 size={13} />
+                                              </button>
+                                            </div>
+                                          )}
+
+                                          {/* Student Exam Results */}
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              handleCancelPreview();
+                                              setInstructionType('results');
+                                              setInstructionSlotId(slot.id);
+                                              setInstructionModalOpen(true);
+                                            }}
+                                            className="flex items-center gap-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-100 rounded-2xl px-4 py-2.5 text-xs font-bold shadow-xs transition-all"
+                                            title="عرض إرشادات وترفيع نتائج وعلامات الطلاب"
+                                          >
+                                            <Upload size={14} />
+                                            <span>ترفيع نتائج الطلاب الامتحانية (CSV)</span>
+                                          </button>
+
+                                          {slot.exam_results && slot.exam_results.length > 0 && (
+                                            <div className="flex items-center gap-2 inline-flex bg-purple-50 border border-purple-200 px-3 py-2 rounded-2xl">
+                                              <span className="text-[11px] text-purple-800 font-extrabold">
+                                                ✅ تم رفع نتائج الطلاب ({slot.exam_results.length} طالب)
+                                              </span>
+                                              <button
+                                                onClick={() => handleClearStudentResults(slot.id)}
+                                                className="p-1 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
+                                                title="حذف نتائج الطلاب"
+                                              >
+                                                <Trash2 size={13} />
+                                              </button>
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
                                     </td>
@@ -1540,6 +1810,352 @@ export default function AdminSlots() {
               >
                 إلغاء
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unified CSV Upload Instructions Modal */}
+      {instructionModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto animate-in fade-in duration-200 text-right" dir="rtl">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col shadow-xl border border-slate-100 animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between flex-row-reverse">
+              <h2 className="text-xl font-bold text-slate-900 font-sans flex items-center gap-2">
+                <HelpCircle className={instructionType === 'distribution' ? 'text-emerald-600' : 'text-purple-600'} size={22} />
+                <span>
+                  {instructionType === 'distribution' ? 'إرشادات رفع توزيع قاعات الطلاب' : 'إرشادات ترفيع علامات ونتائج الطلاب'}
+                </span>
+              </h2>
+              <button 
+                onClick={() => setInstructionModalOpen(false)} 
+                className="p-1.5 hover:bg-slate-100 rounded-xl transition-colors text-slate-400 hover:text-slate-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1 text-slate-700">
+              {/* Show Status alerts for previews */}
+              {previewError && (
+                <div className="p-4 bg-red-50 border border-red-100 text-red-700 text-xs font-bold rounded-xl flex items-center gap-2 flex-row-reverse">
+                  <AlertCircle size={16} className="shrink-0" />
+                  <span>{previewError}</span>
+                </div>
+              )}
+
+              {previewSuccess && (
+                <div className="p-4 bg-green-50 border border-green-100 text-green-700 text-xs font-bold rounded-xl flex items-center gap-2 flex-row-reverse">
+                  <Check size={16} className="shrink-0 animate-bounce" />
+                  <span>{previewSuccess}</span>
+                </div>
+              )}
+
+              {/* Conditional view: if preview is loaded, show preview table. Otherwise show instructions and upload zone */}
+              {((instructionType === 'distribution' && parsedDistribution.length > 0) || (instructionType === 'results' && parsedResults.length > 0)) ? (
+                // Preview Table View
+                <div className="space-y-4 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between flex-row-reverse bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                    <span className="text-xs text-slate-500 font-bold">اسم الملف المرفوع: <span className="text-slate-800 font-mono">{previewFileName}</span></span>
+                    <button
+                      onClick={handleCancelPreview}
+                      className="text-xs text-red-600 font-bold hover:underline"
+                    >
+                      تغيير الملف / إعادة الرفع
+                    </button>
+                  </div>
+
+                  <h4 className="text-xs font-bold text-slate-800">معاينة البيانات والتحليل قبل الحفظ:</h4>
+                  <div className="border border-slate-100 rounded-2xl overflow-x-auto touch-pan-x max-h-80 overflow-y-auto bg-white shadow-xs">
+                    {instructionType === 'distribution' ? (
+                      <table className="w-full text-right text-xs min-w-full border-collapse">
+                        <thead>
+                          <tr className="bg-emerald-50/50 text-emerald-900 font-bold border-b border-emerald-100 sticky top-0 bg-white">
+                            <th className="p-3 text-right">اسم الطالب</th>
+                            <th className="p-3 text-right">القاعة / مكان المراقبة</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                          {parsedDistribution.map((row, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50/50">
+                              <td className="p-3 text-slate-800 font-bold">{row.student_name}</td>
+                              <td className="p-3 text-emerald-700 font-semibold">{row.room}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    ) : (
+                      <table className="w-full text-right text-xs min-w-full border-collapse">
+                        <thead>
+                          <tr className="bg-purple-50/50 text-purple-900 font-bold border-b border-purple-100 sticky top-0 bg-white">
+                            <th className="p-3 text-right">الرقم الامتحاني</th>
+                            <th className="p-3 text-right">اسم الطالب</th>
+                            <th className="p-3 text-center">عملي</th>
+                            <th className="p-3 text-center">نظري</th>
+                            <th className="p-3 text-center">المحصلة</th>
+                            <th className="p-3 text-center">النتيجة</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                          {parsedResults.map((row, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50/50">
+                              <td className="p-3 text-slate-505 font-bold">{row.exam_number}</td>
+                              <td className="p-3 text-slate-800 font-bold">{row.student_name}</td>
+                              <td className="p-3 text-center text-slate-500">{row.practical_grade}</td>
+                              <td className="p-3 text-center text-slate-500">{row.theory_grade}</td>
+                              <td className="p-3 text-center text-indigo-600 font-black">{row.final_score}</td>
+                              <td className="p-3 text-center">
+                                <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                  row.status === 'ناجح' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-700 border border-red-100'
+                                }`}>
+                                  {row.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                // Instructions & Upload Form View
+                instructionType === 'distribution' ? (
+                  // Distribution Instructions
+                  <div className="space-y-4 animate-in fade-in duration-200">
+                    <div className="bg-emerald-50/70 border border-emerald-100 p-5 rounded-2xl space-y-3">
+                      <h3 className="text-sm font-bold text-emerald-900 flex items-center gap-2 flex-row-reverse">
+                        <AlertCircle size={18} className="text-emerald-600" />
+                        <span>تنسيق الأعمدة لجدول القاعات (4 أعمدة):</span>
+                      </h3>
+                      <p className="text-xs text-emerald-950 leading-relaxed">
+                        يرجى إنشاء ملف إكسل يحتوي على 4 أعمدة رئيسية لتوزيع قاعات الطلاب، ثم تصديره وحفظه بصيغة <strong>CSV (Comma delimited)</strong>:
+                      </p>
+
+                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs text-slate-700 font-medium">
+                        <div className="bg-white p-3 rounded-lg border border-emerald-100 flex flex-col items-end text-right">
+                          <span className="font-bold text-emerald-700 text-[11px]">العمود الأول (1)</span>
+                          <span className="text-[10px] text-slate-500 mt-1">اسم الطالب 1</span>
+                        </div>
+                        <div className="bg-white p-3 rounded-lg border border-emerald-100 flex flex-col items-end text-right">
+                          <span className="font-bold text-emerald-700 text-[11px]">العمود الثاني (2)</span>
+                          <span className="text-[10px] text-slate-500 mt-1">القاعة / مكان المراقبة 1</span>
+                        </div>
+                        <div className="bg-white p-3 rounded-lg border border-emerald-100 flex flex-col items-end text-right">
+                          <span className="font-bold text-emerald-700 text-[11px]">العمود الثالث (3)</span>
+                          <span className="text-[10px] text-slate-500 mt-1">اسم الطالب 2</span>
+                        </div>
+                        <div className="bg-white p-3 rounded-lg border border-emerald-100 flex flex-col items-end text-right">
+                          <span className="font-bold text-emerald-700 text-[11px]">العمود الرابع (4)</span>
+                          <span className="text-[10px] text-slate-500 mt-1">القاعة / مكان المراقبة 2</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Example Table */}
+                    <div className="border border-emerald-100 rounded-2xl overflow-hidden bg-white shadow-xs">
+                      <div className="bg-emerald-600/5 px-4 py-2 border-b border-emerald-100 text-xs font-bold text-emerald-800 text-center">
+                        مثال تطبيقي لملف الإكسل / CSV لتوزيع القاعات (4 أعمدة متجاورة لتوفير المساحة)
+                      </div>
+                      <div className="overflow-x-auto touch-pan-x">
+                        <table className="w-full text-center text-xs border-collapse min-w-[500px]">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-emerald-50 text-slate-600 font-bold">
+                              <th className="p-3 border-l border-emerald-50">اسم الطالب</th>
+                              <th className="p-3 border-l border-emerald-50">القاعة / مكان المراقبة</th>
+                              <th className="p-3 border-l border-emerald-50">اسم الطالب</th>
+                              <th className="p-3">القاعة / مكان المراقبة</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            <tr className="text-slate-700">
+                              <td className="p-3 border-l border-emerald-50 font-bold">عامر الدين الحمامي</td>
+                              <td className="p-3 border-l border-emerald-50">القاعة الأولى</td>
+                              <td className="p-3 border-l border-emerald-50 font-bold">رنا أحمد المحمد</td>
+                              <td className="p-3">المرسم 4</td>
+                            </tr>
+                            <tr className="text-slate-700 bg-slate-50/50">
+                              <td className="p-3 border-l border-emerald-50 font-bold">سامر خالد العلي</td>
+                              <td className="p-3 border-l border-emerald-50">التوسع 2</td>
+                              <td className="p-3 border-l border-emerald-50 font-bold">رائد حسن المحمود</td>
+                              <td className="p-3">القبو 1</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* File Upload Zone */}
+                    <div className="pt-4 border-t border-slate-100">
+                      <div className="flex flex-col items-center justify-center border-2 border-dashed border-emerald-200 rounded-2xl p-6 bg-emerald-50/20 hover:bg-emerald-50/40 transition-colors relative group">
+                        <Upload size={32} className="text-emerald-500 group-hover:scale-110 transition-transform mb-2" />
+                        <p className="text-xs font-bold text-emerald-800 mb-1">انقر هنا لاختيار ملف الـ CSV وتوزيع قاعات الطلاب لهذه المادة</p>
+                        <p className="text-[10px] text-slate-400">يدعم الملفات بصيغة CSV فقط (ترميز UTF-8 أو Windows-1256)</p>
+                        <input 
+                          type="file" 
+                          accept=".csv" 
+                          onChange={handlePreviewStudentDistribution} 
+                          className="absolute inset-0 opacity-0 cursor-pointer" 
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  // Results Instructions
+                  <div className="space-y-4 animate-in fade-in duration-200">
+                    <div className="bg-purple-50/70 border border-purple-100 p-5 rounded-2xl space-y-3">
+                      <h3 className="text-sm font-bold text-purple-900 flex items-center gap-2 flex-row-reverse">
+                        <AlertCircle size={18} className="text-purple-600" />
+                        <span>تنسيق الأعمدة لملف العلامات والنتائج:</span>
+                      </h3>
+                      <p className="text-xs text-purple-950 leading-relaxed">
+                        يرجى إنشاء ملف إكسل يحتوي على الأعمدة التالية لنتائج الطلاب، ثم تصديره بصيغة <strong>CSV (Comma delimited)</strong> لترفيع النتائج في النظام:
+                      </p>
+
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs text-slate-700 font-medium">
+                        <div className="bg-white p-2.5 rounded-lg border border-purple-100 flex flex-col items-end text-right">
+                          <span className="font-bold text-purple-700">اسم الطالب</span>
+                          <span className="text-[10px] text-slate-500 mt-1">الاسم الكامل للطالب.</span>
+                        </div>
+                        <div className="bg-white p-2.5 rounded-lg border border-purple-100 flex flex-col items-end text-right">
+                          <span className="font-bold text-purple-700">الرقم الامتحاني</span>
+                          <span className="text-[10px] text-slate-500 mt-1">الرقم الخاص ببطاقة الطالب الامتحانية.</span>
+                        </div>
+                        <div className="bg-white p-2.5 rounded-lg border border-purple-100 flex flex-col items-end text-right">
+                          <span className="font-bold text-purple-700">اسم المادة</span>
+                          <span className="text-[10px] text-slate-500 mt-1">اسم المقرر الامتحاني (اختياري).</span>
+                        </div>
+                        <div className="bg-white p-2.5 rounded-lg border border-purple-100 flex flex-col items-end text-right">
+                          <span className="font-bold text-purple-700">علامة العملي</span>
+                          <span className="text-[10px] text-slate-500 mt-1">درجة الجانب العملي للمقرر.</span>
+                        </div>
+                        <div className="bg-white p-2.5 rounded-lg border border-purple-100 flex flex-col items-end text-right">
+                          <span className="font-bold text-purple-700">علامة النظري</span>
+                          <span className="text-[10px] text-slate-500 mt-1">درجة الاختبار النظري الورقي.</span>
+                        </div>
+                        <div className="bg-white p-2.5 rounded-lg border border-purple-100 flex flex-col items-end text-right">
+                          <span className="font-bold text-purple-700">المحصلة النهائية</span>
+                          <span className="text-[10px] text-slate-500 mt-1">مجموع الدرجتين (النظري + العملي).</span>
+                        </div>
+                        <div className="bg-white p-2.5 rounded-lg border border-purple-100 flex flex-col items-end col-span-2 md:col-span-3 text-right">
+                          <span className="font-bold text-purple-700">النتيجة (ناجح أو راسب)</span>
+                          <span className="text-[10px] text-slate-500 mt-1">تحديد ما إذا كان الطالب "ناجح" أو "راسب" في المادة.</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Example Table */}
+                    <div className="border border-purple-100 rounded-2xl overflow-hidden bg-white shadow-xs">
+                      <div className="bg-purple-600/5 px-4 py-2 border-b border-purple-100 text-xs font-bold text-purple-800 text-center">
+                        مثال تطبيقي لملف الإكسل / CSV للعلامات والنتائج
+                      </div>
+                      <div className="overflow-x-auto touch-pan-x">
+                        <table className="w-full text-center text-[11px] border-collapse min-w-[500px]">
+                          <thead>
+                            <tr className="bg-slate-50 border-b border-purple-50 text-slate-600 font-bold">
+                              <th className="p-2 border-l border-purple-50">اسم الطالب</th>
+                              <th className="p-2 border-l border-purple-50">الرقم الامتحاني</th>
+                              <th className="p-2 border-l border-purple-50">اسم المادة</th>
+                              <th className="p-2 border-l border-purple-50">علامة العملي</th>
+                              <th className="p-2 border-l border-purple-50">علامة النظري</th>
+                              <th className="p-2 border-l border-purple-50">المحصلة النهائية</th>
+                              <th className="p-2">النتيجة</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            <tr className="text-slate-700">
+                              <td className="p-2 border-l border-purple-50 font-bold">عامر الدين الحمامي</td>
+                              <td className="p-2 border-l border-purple-50">40915</td>
+                              <td className="p-2 border-l border-purple-50">تصميم معماري 1</td>
+                              <td className="p-2 border-l border-purple-50">35</td>
+                              <td className="p-2 border-l border-purple-50">45</td>
+                              <td className="p-2 border-l border-purple-50 font-black">80</td>
+                              <td className="p-2"><span className="bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-full font-bold">ناجح</span></td>
+                            </tr>
+                            <tr className="text-slate-700 bg-slate-50/50">
+                              <td className="p-2 border-l border-purple-50 font-bold">رنا أحمد المحمد</td>
+                              <td className="p-2 border-l border-purple-50">40916</td>
+                              <td className="p-2 border-l border-purple-50">تصميم معماري 1</td>
+                              <td className="p-2 border-l border-purple-50">20</td>
+                              <td className="p-2 border-l border-purple-50">25</td>
+                              <td className="p-2 border-l border-purple-50 font-black">45</td>
+                              <td className="p-2"><span className="bg-red-50 text-red-700 px-2.5 py-0.5 rounded-full font-bold">راسب</span></td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* File Upload Zone */}
+                    <div className="pt-4 border-t border-slate-100">
+                      <div className="flex flex-col items-center justify-center border-2 border-dashed border-purple-200 rounded-2xl p-6 bg-purple-50/20 hover:bg-purple-50/40 transition-colors relative group">
+                        <Upload size={32} className="text-purple-500 group-hover:scale-110 transition-transform mb-2" />
+                        <p className="text-xs font-bold text-purple-800 mb-1">انقر هنا لاختيار ملف الـ CSV وترفيع نتائج وعلامات الطلاب لهذه المادة</p>
+                        <p className="text-[10px] text-slate-400">يدعم الملفات بصيغة CSV فقط (ترميز UTF-8 أو Windows-1256)</p>
+                        <input 
+                          type="file" 
+                          accept=".csv" 
+                          onChange={handlePreviewStudentResults} 
+                          className="absolute inset-0 opacity-0 cursor-pointer" 
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex gap-3">
+              {((instructionType === 'distribution' && parsedDistribution.length > 0) || (instructionType === 'results' && parsedResults.length > 0)) ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={importLoading}
+                    onClick={instructionType === 'distribution' ? handleSaveStudentDistribution : handleSaveStudentResults}
+                    className={`flex-1 text-white py-3 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 text-sm shadow-xs ${
+                      instructionType === 'distribution' 
+                        ? 'bg-emerald-600 hover:bg-emerald-700' 
+                        : 'bg-purple-600 hover:bg-purple-700'
+                    }`}
+                  >
+                    {importLoading ? (
+                      <>
+                        <Loader2 className="animate-spin" size={18} />
+                        <span>جاري حفظ وتحليل البيانات...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={16} />
+                        <span>
+                          {instructionType === 'distribution' 
+                            ? `إنشاء وتحليل التوزيع (${parsedDistribution.length})` 
+                            : `إنشاء وتحليل العلامات (${parsedResults.length})`
+                          }
+                        </span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelPreview}
+                    className="flex-1 bg-white border border-slate-200 text-slate-700 py-3 rounded-2xl font-bold hover:bg-slate-50 transition-colors text-sm"
+                  >
+                    إلغاء التحديد
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setInstructionModalOpen(false)}
+                  className={`flex-1 text-white py-3 rounded-2xl font-bold transition-colors text-sm ${
+                    instructionType === 'distribution' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-purple-600 hover:bg-purple-700'
+                  }`}
+                >
+                  فهمت الإرشادات
+                </button>
+              )}
             </div>
           </div>
         </div>

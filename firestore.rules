@@ -54,7 +54,7 @@ service cloud.firestore {
       let requiredFields = ['course_name', 'exam_date', 'start_time', 'end_time', 'required_invigilators', 'academic_year'];
       return data.keys().hasAll(requiredFields) &&
              data.course_name is string && data.course_name.size() > 0 &&
-             data.required_invigilators is number && data.required_invigilators > 0 &&
+             (data.required_invigilators is int || data.required_invigilators is float) && data.required_invigilators > 0 &&
              data.academic_year is int && data.academic_year >= 1 && data.academic_year <= 5;
     }
 
@@ -66,7 +66,9 @@ service cloud.firestore {
 
     function isValidSettings(data) {
       return (!('registration_open' in data) || data.registration_open is bool) &&
-             (!('default_required_hours' in data) || data.default_required_hours is number);
+             (!('default_required_hours' in data) || (data.default_required_hours is int || data.default_required_hours is float)) &&
+             (!('distribution_unlock_hours' in data) || (data.distribution_unlock_hours is int || data.distribution_unlock_hours is float)) &&
+             (!('show_public_results' in data) || data.show_public_results is bool);
     }
 
     function areProfilesLocked() {
@@ -104,7 +106,7 @@ service cloud.firestore {
     }
 
     match /exam_slots/{slotId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
@@ -138,6 +140,11 @@ service cloud.firestore {
     
     match /test/connection {
       allow read: if true;
+    }
+
+    match /publicSchedule/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
   }
 }

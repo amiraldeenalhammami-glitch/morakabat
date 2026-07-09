@@ -20,6 +20,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import AdminSlots from './pages/AdminSlots';
 import AdminStudents from './pages/AdminStudents';
 import AdminSettings from './pages/AdminSettings';
+import PublicLanding from './pages/PublicLanding';
 
 function HomeRedirect() {
   const { isAdmin, loading, user } = useAuth();
@@ -104,8 +105,8 @@ export default function App() {
           } />
 
           {/* Default Redirects */}
-          <Route path="/" element={<HomeRedirect />} />
-          <Route path="*" element={<HomeRedirect />} />
+          <Route path="/" element={<PublicLanding />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
     </AuthProvider>

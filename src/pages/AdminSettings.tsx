@@ -7,6 +7,7 @@ import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
 import { Settings, Save, AlertCircle, CheckCircle, Loader2, Image as ImageIcon, Camera, Shield, UserMinus, UserPlus, Lock, Unlock } from 'lucide-react';
 import { uploadToCloudinary } from '../utils/cloudinary';
 import { collection, query, where, getDocs } from 'firebase/firestore';
+import { compileAndPublishSchedule } from '../utils/publicSchedule';
 
 export default function AdminSettings() {
   const { profile, isSuperAdmin } = useAuth();
@@ -28,6 +29,11 @@ export default function AdminSettings() {
     trim_hours_target: null,
     trim_hours_started_at: null,
     trim_hours_processed: false,
+    show_public_schedule: false,
+    show_public_results: false,
+    global_settings_version: 0,
+    developer_fb_link: '',
+    distribution_unlock_hours: 6,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -57,6 +63,11 @@ export default function AdminSettings() {
           trim_hours_target: data.trim_hours_target ?? null,
           trim_hours_started_at: data.trim_hours_started_at ?? null,
           trim_hours_processed: data.trim_hours_processed ?? false,
+          show_public_schedule: data.show_public_schedule ?? false,
+          show_public_results: data.show_public_results ?? false,
+          global_settings_version: data.global_settings_version ?? 0,
+          developer_fb_link: data.developer_fb_link ?? '',
+          distribution_unlock_hours: data.distribution_unlock_hours ?? 6,
         });
       }
       setLoading(false);
@@ -218,7 +229,13 @@ export default function AdminSettings() {
     setMessage(null);
     try {
       await setDoc(doc(db, 'settings', 'global'), settings);
-      setMessage({ type: 'success', text: 'تم حفظ الإعدادات بنجاح' });
+      
+      if (settings.show_public_schedule || settings.show_public_results) {
+        await compileAndPublishSchedule();
+        setMessage({ type: 'success', text: 'تم حفظ الإعدادات ونشر وتحديث البيانات للعموم بنجاح!' });
+      } else {
+        setMessage({ type: 'success', text: 'تم حفظ الإعدادات بنجاح.' });
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'settings/global');
     } finally {
@@ -524,6 +541,109 @@ export default function AdminSettings() {
               <span className="text-slate-500 font-medium">ساعة</span>
             </div>
             <p className="text-xs text-slate-400 mt-2">هذا الرقم سيطبق على جميع المراقبين الذين لم يتم تحديد ساعات خاصة بهم.</p>
+          </div>
+
+          {/* كود تفعيل حساب المشرف */}
+          <div className="md:col-span-2 border-t border-slate-100 pt-6">
+            <label className="block text-sm font-bold text-slate-700 mb-2">كود تفعيل حساب المشرف / المراقب لإنشاء حسابات جديدة</label>
+            <div className="relative">
+              <Lock size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="أدخل كود تفعيل التسجيل الموحد..."
+                value={settings.security_code || ''}
+                onChange={(e) => setSettings({ ...settings, security_code: e.target.value })}
+                className="w-full pr-12 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-sans font-medium text-slate-900"
+              />
+            </div>
+            <p className="text-xs text-slate-400 mt-2">
+              هذا الكود يتم مطابقته إجبارياً أثناء قيام أي مشرف أو مراقب بإنشاء حساب جديد، لمنع الطلاب أو الغرباء من التسجيل في النظام.
+            </p>
+          </div>
+
+          {/* زر التحكم بظهور البرنامج الامتحاني للعامة */}
+          <div className="md:col-span-2 border-t border-slate-100 pt-6">
+            <div className="flex items-center justify-between bg-slate-50 p-5 rounded-3xl border border-slate-100">
+              <div className="space-y-1">
+                <span className="font-extrabold text-slate-800 text-sm block">إظهار البرنامج الامتحاني للعموم</span>
+                <span className="text-xs text-slate-400 block">عند التفعيل، يظهر برنامج الامتحانات والزر التلقائي لتوزيع الطلاب في البوابة الرئيسية للعامة (/).</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSettings({ ...settings, show_public_schedule: !settings.show_public_schedule })}
+                className={`relative inline-flex h-7 w-14 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  settings.show_public_schedule ? 'bg-indigo-600' : 'bg-slate-300'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                    settings.show_public_schedule ? '-translate-x-7' : '-translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          {/* زر التحكم بظهور النتائج الامتحانية للعامة */}
+          <div className="md:col-span-2 border-t border-slate-100 pt-6">
+            <div className="flex items-center justify-between bg-slate-50 p-5 rounded-3xl border border-slate-100">
+              <div className="space-y-1">
+                <span className="font-extrabold text-slate-800 text-sm block">إظهار النتائج الامتحانية للعموم</span>
+                <span className="text-xs text-slate-400 block">عند التفعيل، يظهر قسم النتائج الامتحانية والبحث عن العلامات للطلاب في البوابة الرئيسية للعامة (/).</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSettings({ ...settings, show_public_results: !settings.show_public_results })}
+                className={`relative inline-flex h-7 w-14 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  settings.show_public_results ? 'bg-indigo-600' : 'bg-slate-300'
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                    settings.show_public_results ? '-translate-x-7' : '-translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          {/* وقت فتح توزيع القاعات للطلاب */}
+          <div className="md:col-span-2 border-t border-slate-100 pt-6">
+            <label className="block text-sm font-bold text-slate-700 mb-2">توقيت إتاحة وعرض توزيع قاعات الطلاب قبل الامتحان (بالساعات)</label>
+            <div className="flex items-center gap-4">
+              <input
+                type="number"
+                min="0"
+                value={settings.distribution_unlock_hours ?? 6}
+                onChange={(e) => setSettings({ ...settings, distribution_unlock_hours: parseInt(e.target.value) || 0 })}
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-medium"
+              />
+              <span className="text-slate-500 font-medium">ساعة</span>
+            </div>
+            <p className="text-xs text-slate-400 mt-2">
+              تحديد متى يفتح زر "عرض القاعات" للطلاب في الواجهة العامة قبل موعد المادة (مثلاً: قبل 6 ساعات).
+            </p>
+          </div>
+
+          {/* رابط مبرمج النظام (للسوبر أدمن فقط) */}
+          <div className="md:col-span-2 border-t border-slate-100 pt-6">
+            <label className="block text-sm font-bold text-slate-700 mb-2">رابط حساب مبرمج النظام (المهندس أمير الدين)</label>
+            <div className="relative">
+              <Shield size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                disabled={!isSuperAdmin}
+                placeholder={isSuperAdmin ? "أدخل رابط فيسبوك المبرمج الجديد..." : "••••••••"}
+                value={isSuperAdmin ? (settings.developer_fb_link || '') : "••••••••"}
+                onChange={(e) => setSettings({ ...settings, developer_fb_link: e.target.value })}
+                className="w-full pr-12 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-sans font-medium text-slate-900"
+              />
+            </div>
+            <p className="text-xs text-slate-400 mt-2">
+              {isSuperAdmin
+                ? "هذا الحقل خاص بـ Super Admin لتحديث الرابط التشعبي للمهندس أمير الدين الحمامي في أسفل لوحة التحكم وبقية واجهات التطبيق."
+                : "رابط مبرمج النظام يظهر ويتم تعديله فقط بواسطة السوبر أدمن."}
+            </p>
           </div>
 
           {/* New fields for surplus trimming grace period */}

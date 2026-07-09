@@ -1,18 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../firebase';
 import { LogIn, Mail, Lock, AlertCircle, Chrome } from 'lucide-react';
 import { Logo } from '../components/Logo';
+import { DeveloperFooter } from '../components/DeveloperFooter';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Login() {
+  const { user, isAdmin } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      if (isAdmin) {
+        navigate('/admin', { replace: true });
+      } else {
+        navigate('/dashboard', { replace: true });
+      }
+    }
+  }, [user, isAdmin, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -184,19 +198,7 @@ export default function Login() {
           </Link>
         </p>
 
-        <div className="mt-8 pt-6 border-t text-center">
-          <p className="text-[10px] text-slate-400">
-            صمم هذا التطبيق بواسطة{' '}
-            <a 
-              href="https://www.facebook.com/amir.aldeen.alhammami/?locale=ar_AR" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-indigo-500 hover:underline font-medium"
-            >
-              م.أمير الدين الحمامي
-            </a>
-          </p>
-        </div>
+        <DeveloperFooter className="mt-8 pt-6 border-t" />
       </div>
     </div>
   );
