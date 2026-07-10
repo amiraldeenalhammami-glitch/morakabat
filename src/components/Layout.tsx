@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { auth } from '../firebase';
-import { LogOut, User, LayoutDashboard, Calendar, Users, Settings, Menu, X, Download } from 'lucide-react';
+import { LogOut, User, LayoutDashboard, Calendar, Users, Settings, Menu, X, Download, Eye } from 'lucide-react';
 import { Logo } from './Logo';
 import { usePWA } from '../hooks/usePWA';
 import { checkAndRunTrimming } from '../utils/trimming';
@@ -24,12 +24,19 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     navigate('/');
   };
 
+  const isExamOfficer = profile?.role === 'exam_officer';
+
   const navItems = isAdmin 
     ? [
         { name: 'لوحة التحكم', path: '/admin', icon: LayoutDashboard },
         { name: 'البرنامج الامتحاني', path: '/admin/slots', icon: Calendar },
         { name: 'المراقبين', path: '/admin/students', icon: Users },
+        { name: 'المعاينة الذكية', path: '/admin/preview', icon: Eye },
         { name: 'الإعدادات', path: '/admin/settings', icon: Settings },
+      ]
+    : isExamOfficer
+    ? [
+        { name: 'لوحة التحكم', path: '/officer', icon: LayoutDashboard },
       ]
     : profile?.status !== 'active'
     ? [
@@ -115,6 +122,10 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 {isAdmin ? (
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700 ring-1 ring-inset ring-indigo-200">
                     مدير
+                  </span>
+                ) : isExamOfficer ? (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 ring-1 ring-inset ring-purple-200">
+                    موظف امتحانات
                   </span>
                 ) : (
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 ring-1 ring-inset ring-emerald-200">

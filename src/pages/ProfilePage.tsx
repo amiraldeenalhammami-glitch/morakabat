@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { User, Mail, Phone, IdCard, Building, Clock, Shield, Edit2, Save, X, Loader2, Camera, Image as ImageIcon, CheckCircle2, MessageSquare, XCircle, Lock } from 'lucide-react';
+import { User, Mail, Phone, IdCard, Building, Clock, Shield, Edit2, Save, X, Loader2, Camera, Image as ImageIcon, CheckCircle2, MessageSquare, XCircle, Lock, AlertCircle } from 'lucide-react';
 import { doc, updateDoc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { AppSettings } from '../types';
@@ -99,6 +99,20 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-8">
+      {profile?.status === 'pending' && !profile?.email_verified && !user?.emailVerified && (
+        <div className="bg-amber-50 border-2 border-amber-300 p-8 rounded-3xl text-right space-y-4 shadow-md animate-pulse">
+          <div className="flex items-center gap-3 text-amber-800">
+            <AlertCircle size={28} className="shrink-0" />
+            <h3 className="text-lg font-extrabold">تنبيه هام: تأكيد الحساب مطلوب</h3>
+          </div>
+          <p className="text-amber-900 font-medium leading-relaxed text-sm md:text-base text-justify whitespace-pre-line">
+            السيد الزميل المراقب، يرجى التكرم بالدخول إلى بريدكم الإلكتروني لتأكيد الحساب، وذلك حتى يتسنى للمشرف العام مراجعة وطلب تفعيل حسابكم بنجاح.
+            {"\n"}
+            تنويه: قد تظهر رسالة التأكيد أحياناً في مجلد (الرسائل غير المرغوب فيها / Spam أو Junk). في حال عدم العثور عليها في الوارد الرئيسي، يرجى تفقّد القائمة الجانبية لبريدكم واختيار 'المزيد' (More) ثم الدخول لمجلد الرسائل غير المرغوب فيها، وافتح رسالة التأكيد واضغط على الرابط المرفق.
+          </p>
+        </div>
+      )}
+
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">الملف الشخصي</h1>

@@ -15,7 +15,17 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [isInIframe, setIsInIframe] = useState(false);
   const navigate = useNavigate();
+
+  // Detect iframe
+  useEffect(() => {
+    try {
+      setIsInIframe(window.self !== window.top);
+    } catch (e) {
+      setIsInIframe(true);
+    }
+  }, []);
 
   // Redirect if already logged in
   useEffect(() => {
@@ -37,13 +47,6 @@ export default function Login() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      if (!user.emailVerified) {
-        setError('يرجى تفعيل حسابك من خلال الرابط المرسل إلى بريدك الإلكتروني قبل تسجيل الدخول.');
-        await auth.signOut();
-        setLoading(false);
-        return;
-      }
-
       navigate('/');
     } catch (err: any) {
       console.warn('Login Error:', err.message || err);
@@ -57,7 +60,7 @@ export default function Login() {
       } else if (errorCode === 'auth/internal-error') {
         setError('حدث خطأ داخلي في الخادم. يرجى التأكد من اتصالك بالإنترنت والمحاولة مرة أخرى.');
       } else if (errorCode === 'auth/network-request-failed') {
-        setError('فشل الاتصال بالخادم. يرجى التأكد من اتصالك بالإنترنت.');
+        setError('فشل الاتصال بـ Firebase (Network Request Failed). يحدث هذا عادةً بسبب قيود متصفحك على الإطارات الداخلية (Iframe)، أو مانع الإعلانات، أو حظر ملفات تعريف الارتباط للجهات الخارجية (Third-party cookies). لحل المشكلة فوراً، يرجى الضغط على زر "فتح في نافذة جديدة" بالأعلى لتسجيل الدخول بأمان.');
       } else {
         setError(`حدث خطأ أثناء تسجيل الدخول (${errorCode}): ${errorMessage}`);
       }
@@ -108,6 +111,22 @@ export default function Login() {
           <p className="text-slate-500 mt-2 text-center">مرحباً بك في نظام المراقبات الامتحانية</p>
           <p className="text-xs text-slate-400 mt-1">جامعة دمشق كلية الهندسة المعمارية</p>
         </div>
+
+        {isInIframe && (
+          <div className="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-2xl text-right animate-pulse">
+            <p className="text-xs text-indigo-900 leading-relaxed font-bold">
+              💡 لتجنب أخطاء تسجيل الدخول والشبكة (مثل حظر ملفات تعريف الارتباط في الإطار الداخلي)، يرجى فتح التطبيق في نافذة مستقلة كاملة:
+            </p>
+            <a 
+              href={window.location.href} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="mt-2.5 inline-flex items-center gap-1.5 bg-indigo-600 text-white text-[11px] font-bold px-4 py-2 rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-150"
+            >
+              <span>فتح في نافذة جديدة ↗</span>
+            </a>
+          </div>
+        )}
 
         {error && (
           <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-2xl flex items-center gap-3 text-sm">

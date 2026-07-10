@@ -1,4 +1,4 @@
-export type UserRole = 'student' | 'admin';
+export type UserRole = 'student' | 'admin' | 'exam_officer';
 export type ObserverType = 'طالب دراسات' | 'موظف' | 'أمين قاعة' | 'دكتور مشرف';
 
 export interface UserProfile {
@@ -19,6 +19,7 @@ export interface UserProfile {
   profile_image_url?: string;
   id_card_image_url?: string;
   observer_type?: ObserverType;
+  email_verified?: boolean;
 }
 
 export interface RoomRange {
@@ -59,7 +60,7 @@ export interface ExamSlot {
   expansions_from?: number;
   expansions_to?: number;
   room_ranges?: RoomRange[];
-  student_distribution?: { student_name: string; room: string }[];
+  student_distribution?: { student_name: string; room: string; exam_number?: string }[];
   exam_results?: StudentExamResult[];
 }
 

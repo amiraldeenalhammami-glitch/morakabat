@@ -41,7 +41,7 @@ export default function AdminSlots() {
   const [importSuccess, setImportSuccess] = useState<string | null>(null);
 
   // Preview / Analysis states for distribution & results
-  const [parsedDistribution, setParsedDistribution] = useState<{ student_name: string; room: string }[]>([]);
+  const [parsedDistribution, setParsedDistribution] = useState<{ exam_number?: string; student_name: string; room: string }[]>([]);
   const [parsedResults, setParsedResults] = useState<any[]>([]);
   const [previewFileName, setPreviewFileName] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -516,6 +516,11 @@ export default function AdminSlots() {
       await updateDoc(doc(db, 'exam_slots', instructionSlotId), {
         student_distribution: parsedDistribution
       });
+      try {
+        await compileAndPublishSchedule();
+      } catch (compileErr) {
+        console.error("Failed to auto-compile schedule after distribution save:", compileErr);
+      }
       alert(`تم رفع وحفظ توزيع قاعات الطلاب لـ ${parsedDistribution.length} طالب بنجاح!`);
       setInstructionModalOpen(false);
       setParsedDistribution([]);
@@ -535,6 +540,11 @@ export default function AdminSlots() {
           await updateDoc(doc(db, 'exam_slots', slotId), {
             student_distribution: []
           });
+          try {
+            await compileAndPublishSchedule();
+          } catch (compileErr) {
+            console.error("Failed to auto-compile schedule after distribution clear:", compileErr);
+          }
           alert('تم حذف توزيع الطلاب لهذه المادة بنجاح.');
         } catch (err: any) {
           alert('فشل في حذف توزيع الطلاب: ' + err.message);
@@ -1872,13 +1882,15 @@ export default function AdminSlots() {
                       <table className="w-full text-right text-xs min-w-full border-collapse">
                         <thead>
                           <tr className="bg-emerald-50/50 text-emerald-900 font-bold border-b border-emerald-100 sticky top-0 bg-white">
+                            <th className="p-3 text-right">الرقم الامتحاني</th>
                             <th className="p-3 text-right">اسم الطالب</th>
-                            <th className="p-3 text-right">القاعة / مكان المراقبة</th>
+                            <th className="p-3 text-right">القاعة الامتحانية / المكان</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 bg-white">
                           {parsedDistribution.map((row, idx) => (
                             <tr key={idx} className="hover:bg-slate-50/50">
+                              <td className="p-3 text-slate-500 font-mono font-medium">{row.exam_number || 'غير متوفر'}</td>
                               <td className="p-3 text-slate-800 font-bold">{row.student_name}</td>
                               <td className="p-3 text-emerald-700 font-semibold">{row.room}</td>
                             </tr>
@@ -1927,28 +1939,24 @@ export default function AdminSlots() {
                     <div className="bg-emerald-50/70 border border-emerald-100 p-5 rounded-2xl space-y-3">
                       <h3 className="text-sm font-bold text-emerald-900 flex items-center gap-2 flex-row-reverse">
                         <AlertCircle size={18} className="text-emerald-600" />
-                        <span>تنسيق الأعمدة لجدول القاعات (4 أعمدة):</span>
+                        <span>تنسيق الأعمدة لجدول القاعات (3 أعمدة):</span>
                       </h3>
                       <p className="text-xs text-emerald-950 leading-relaxed">
-                        يرجى إنشاء ملف إكسل يحتوي على 4 أعمدة رئيسية لتوزيع قاعات الطلاب، ثم تصديره وحفظه بصيغة <strong>CSV (Comma delimited)</strong>:
+                        يرجى إنشاء ملف إكسل يحتوي على 3 أعمدة رئيسية لتوزيع قاعات الطلاب، ثم تصديره وحفظه بصيغة <strong>CSV (Comma delimited)</strong>:
                       </p>
 
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs text-slate-700 font-medium">
+                      <div className="grid grid-cols-3 gap-3 text-xs text-slate-700 font-medium">
                         <div className="bg-white p-3 rounded-lg border border-emerald-100 flex flex-col items-end text-right">
                           <span className="font-bold text-emerald-700 text-[11px]">العمود الأول (1)</span>
-                          <span className="text-[10px] text-slate-500 mt-1">اسم الطالب 1</span>
+                          <span className="text-[10px] text-slate-500 mt-1">الرقم الامتحاني</span>
                         </div>
                         <div className="bg-white p-3 rounded-lg border border-emerald-100 flex flex-col items-end text-right">
                           <span className="font-bold text-emerald-700 text-[11px]">العمود الثاني (2)</span>
-                          <span className="text-[10px] text-slate-500 mt-1">القاعة / مكان المراقبة 1</span>
+                          <span className="text-[10px] text-slate-500 mt-1">اسم الطالب كامل</span>
                         </div>
                         <div className="bg-white p-3 rounded-lg border border-emerald-100 flex flex-col items-end text-right">
                           <span className="font-bold text-emerald-700 text-[11px]">العمود الثالث (3)</span>
-                          <span className="text-[10px] text-slate-500 mt-1">اسم الطالب 2</span>
-                        </div>
-                        <div className="bg-white p-3 rounded-lg border border-emerald-100 flex flex-col items-end text-right">
-                          <span className="font-bold text-emerald-700 text-[11px]">العمود الرابع (4)</span>
-                          <span className="text-[10px] text-slate-500 mt-1">القاعة / مكان المراقبة 2</span>
+                          <span className="text-[10px] text-slate-500 mt-1">القاعة الامتحانية / المكان</span>
                         </div>
                       </div>
                     </div>
@@ -1956,30 +1964,27 @@ export default function AdminSlots() {
                     {/* Example Table */}
                     <div className="border border-emerald-100 rounded-2xl overflow-hidden bg-white shadow-xs">
                       <div className="bg-emerald-600/5 px-4 py-2 border-b border-emerald-100 text-xs font-bold text-emerald-800 text-center">
-                        مثال تطبيقي لملف الإكسل / CSV لتوزيع القاعات (4 أعمدة متجاورة لتوفير المساحة)
+                        مثال تطبيقي لملف الإكسل / CSV لتوزيع القاعات (3 أعمدة رئيسية)
                       </div>
                       <div className="overflow-x-auto touch-pan-x">
-                        <table className="w-full text-center text-xs border-collapse min-w-[500px]">
+                        <table className="w-full text-center text-xs border-collapse">
                           <thead>
                             <tr className="bg-slate-50 border-b border-emerald-50 text-slate-600 font-bold">
+                              <th className="p-3 border-l border-emerald-50">الرقم الامتحاني</th>
                               <th className="p-3 border-l border-emerald-50">اسم الطالب</th>
-                              <th className="p-3 border-l border-emerald-50">القاعة / مكان المراقبة</th>
-                              <th className="p-3 border-l border-emerald-50">اسم الطالب</th>
-                              <th className="p-3">القاعة / مكان المراقبة</th>
+                              <th className="p-3">القاعة الامتحانية / المكان</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
                             <tr className="text-slate-700">
+                              <td className="p-3 border-l border-emerald-50 font-mono font-medium">10243</td>
                               <td className="p-3 border-l border-emerald-50 font-bold">عامر الدين الحمامي</td>
-                              <td className="p-3 border-l border-emerald-50">القاعة الأولى</td>
-                              <td className="p-3 border-l border-emerald-50 font-bold">رنا أحمد المحمد</td>
-                              <td className="p-3">المرسم 4</td>
+                              <td className="p-3">القاعة الأولى</td>
                             </tr>
                             <tr className="text-slate-700 bg-slate-50/50">
-                              <td className="p-3 border-l border-emerald-50 font-bold">سامر خالد العلي</td>
-                              <td className="p-3 border-l border-emerald-50">التوسع 2</td>
-                              <td className="p-3 border-l border-emerald-50 font-bold">رائد حسن المحمود</td>
-                              <td className="p-3">القبو 1</td>
+                              <td className="p-3 border-l border-emerald-50 font-mono font-medium">10244</td>
+                              <td className="p-3 border-l border-emerald-50 font-bold">رنا أحمد المحمد</td>
+                              <td className="p-3">المرسم 4</td>
                             </tr>
                           </tbody>
                         </table>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { doc, onSnapshot, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
@@ -14,20 +14,24 @@ import {
 const academicYearsList = [1, 2, 3, 4, 5];
 const yearNames = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة'];
 
-export default function PublicLanding() {
-  const { user, isAdmin } = useAuth();
+export default function PublicLanding({ isPreview = false }: { isPreview?: boolean }) {
+  const { user, isAdmin, isExamOfficer } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Route Guard: Logged-in users should be redirected to their dashboards and prevented from accessing /
   useEffect(() => {
-    if (user) {
+    if (isPreview) return; // Skip redirect if in preview mode
+    if (user && location.pathname === '/') {
       if (isAdmin) {
         navigate('/admin', { replace: true });
+      } else if (isExamOfficer) {
+        navigate('/officer', { replace: true });
       } else {
         navigate('/dashboard', { replace: true });
       }
     }
-  }, [user, isAdmin, navigate]);
+  }, [user, isAdmin, isExamOfficer, navigate, location.pathname, isPreview]);
   
   // App settings state
   const [globalSettings, setGlobalSettings] = useState<AppSettings | null>(null);
@@ -44,7 +48,7 @@ export default function PublicLanding() {
   
   // Active modal/popup for viewing student-to-room distribution
   const [activeSlotForDistribution, setActiveSlotForDistribution] = useState<ExamSlot | null>(null);
-  const [distributionList, setDistributionList] = useState<{ student_name: string; room: string }[]>([]);
+  const [distributionList, setDistributionList] = useState<{ student_name: string; room: string; exam_number?: string }[]>([]);
   const [loadingDistribution, setLoadingDistribution] = useState(false);
   const [searchStudentQuery, setSearchStudentQuery] = useState('');
 
@@ -65,6 +69,8 @@ export default function PublicLanding() {
           setActiveView('schedule');
         } else if (data.show_public_results) {
           setActiveView('results');
+        } else if (isPreview) {
+          setActiveView('schedule');
         }
       }
       setLoading(false);
@@ -73,13 +79,13 @@ export default function PublicLanding() {
       setLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [isPreview]);
 
   // 2. Fetch or load cached public schedule when settings change (schedule OR results are visible)
   useEffect(() => {
     if (!globalSettings) return;
 
-    const showPublic = globalSettings.show_public_schedule === true || globalSettings.show_public_results === true;
+    const showPublic = isPreview || globalSettings.show_public_schedule === true || globalSettings.show_public_results === true;
     if (!showPublic) {
       setScheduleSlots([]);
       setLoadingSchedule(false);
@@ -90,7 +96,7 @@ export default function PublicLanding() {
     const cachedVersionStr = localStorage.getItem('public_schedule_version');
     const cachedSlotsStr = localStorage.getItem('public_schedule_cache');
 
-    if (cachedVersionStr && cachedSlotsStr && parseInt(cachedVersionStr) === currentVersion) {
+    if (!isPreview && cachedVersionStr && cachedSlotsStr && parseInt(cachedVersionStr) === currentVersion) {
       try {
         setScheduleSlots(JSON.parse(cachedSlotsStr));
         setLoadingSchedule(false);
@@ -109,8 +115,10 @@ export default function PublicLanding() {
           const data = docSnap.data();
           const slots = data.slots || [];
           setScheduleSlots(slots);
-          localStorage.setItem('public_schedule_cache', JSON.stringify(slots));
-          localStorage.setItem('public_schedule_version', String(currentVersion));
+          if (!isPreview) {
+            localStorage.setItem('public_schedule_cache', JSON.stringify(slots));
+            localStorage.setItem('public_schedule_version', String(currentVersion));
+          }
         } else {
           setScheduleSlots([]);
         }
@@ -122,7 +130,7 @@ export default function PublicLanding() {
     };
 
     loadAggregatedSchedule();
-  }, [globalSettings]);
+  }, [globalSettings, isPreview]);
 
   // Handle viewing student distribution for a specific slot
   const handleOpenDistribution = async (slot: ExamSlot) => {
@@ -150,6 +158,7 @@ export default function PublicLanding() {
 
   // Helper to check if distribution is unlocked based on admin-defined hours before start
   const getIsUnlocked = (slot: ExamSlot): boolean => {
+    if (isPreview) return true; // Preview overrides unlock hours
     try {
       const slotDateTime = new Date(`${slot.exam_date}T${slot.start_time}`);
       if (isNaN(slotDateTime.getTime())) return false;
@@ -165,6 +174,7 @@ export default function PublicLanding() {
 
   // Helper to format remaining time text
   const getRemainingTimeText = (slot: ExamSlot): string => {
+    if (isPreview) return 'وضع المعاينة - القنوات مفتوحة';
     try {
       const slotDateTime = new Date(`${slot.exam_date}T${slot.start_time}`);
       if (isNaN(slotDateTime.getTime())) return '';
@@ -193,7 +203,8 @@ export default function PublicLanding() {
   // Filter distribution list based on search query
   const filteredDistribution = distributionList.filter(item => 
     item.student_name.toLowerCase().includes(searchStudentQuery.toLowerCase()) ||
-    item.room.toLowerCase().includes(searchStudentQuery.toLowerCase())
+    item.room.toLowerCase().includes(searchStudentQuery.toLowerCase()) ||
+    (item.exam_number && item.exam_number.toLowerCase().includes(searchStudentQuery.toLowerCase()))
   );
 
   if (loading) {
@@ -204,11 +215,17 @@ export default function PublicLanding() {
     );
   }
 
-  const isScheduleVisible = globalSettings?.show_public_schedule === true;
-  const isResultsVisible = globalSettings?.show_public_results === true;
+  const isScheduleVisible = isPreview || globalSettings?.show_public_schedule === true;
+  const isResultsVisible = isPreview || globalSettings?.show_public_results === true;
 
   return (
-    <div className="min-h-screen bg-slate-50/50 flex flex-col font-sans antialiased text-right" dir="rtl">
+    <div className="min-h-screen bg-slate-50/50 flex flex-col font-sans antialiased text-right animate-in fade-in duration-200" dir="rtl">
+      {isPreview && (
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-4 py-2.5 text-center text-xs font-bold shadow-sm flex items-center justify-center gap-2">
+          <Sparkles size={16} className="animate-pulse" />
+          <span>⚠️ وضع المعاينة الذكية النشط: أنت تشاهد الواجهة العامة حالياً للتأكد من دقة البيانات وتوزيع القاعات وصحة العلامات قبل النشر للعموم.</span>
+        </div>
+      )}
       {/* Dynamic Navigation Header */}
       <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md border-b border-slate-100 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
@@ -408,7 +425,6 @@ export default function PublicLanding() {
               <h3 className="font-extrabold text-slate-800 text-lg flex items-center gap-2">
                 <span>📅 البرنامج الامتحاني وتوزيع الطلاب للسنوات الخمس</span>
               </h3>
-              <span className="text-xs text-slate-400 font-sans font-medium">نسخة معتمدة رقم: {globalSettings?.global_settings_version || 1}</span>
             </div>
 
             <div className="space-y-3">
@@ -525,7 +541,6 @@ export default function PublicLanding() {
               <h3 className="font-extrabold text-slate-800 text-lg flex items-center gap-2">
                 <span>🏆 قائمة البرنامج وجداول صدور العلامات والنتائج الرسمية للسنوات الخمس</span>
               </h3>
-              <span className="text-xs text-slate-400 font-sans font-medium">نسخة معتمدة رقم: {globalSettings?.global_settings_version || 1}</span>
             </div>
 
             <div className="space-y-3">
@@ -682,21 +697,40 @@ export default function PublicLanding() {
                   لا توجد نتائج لمطابقة "<strong>{searchStudentQuery}</strong>"
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3" style={{ userSelect: 'none' }}>
-                  {filteredDistribution.map((item, idx) => (
-                    <div 
-                      key={idx} 
-                      className="bg-white border border-slate-100 rounded-xl p-3 flex items-center justify-between hover:border-indigo-100 transition-all shadow-xs"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-indigo-500" />
-                        <span className="font-bold text-slate-800 text-sm">{item.student_name}</span>
-                      </div>
-                      <span className="bg-indigo-50 text-indigo-700 font-extrabold text-xs px-3 py-1.5 rounded-lg border border-indigo-100 font-sans">
-                        {item.room}
-                      </span>
-                    </div>
-                  ))}
+                <div className="border border-slate-100 rounded-3xl bg-white overflow-hidden shadow-xs" style={{ userSelect: 'none' }}>
+                  <div className="overflow-x-auto touch-pan-x">
+                    <table className="w-full text-right text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-600 font-extrabold border-b border-slate-100">
+                          <th className="py-3 px-4 text-right">#</th>
+                          <th className="py-3 px-4 text-right">الرقم الامتحاني</th>
+                          <th className="py-3 px-4 text-right">اسم الطالب</th>
+                          <th className="py-3 px-4 text-left">القاعة الامتحانية / المكان</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {filteredDistribution.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
+                            <td className="py-3.5 px-4 font-sans text-slate-400 font-medium text-right">
+                              {idx + 1}
+                            </td>
+                            <td className="py-3.5 px-4 font-sans font-bold text-slate-500 text-right">
+                              {item.exam_number || 'غير متوفر'}
+                            </td>
+                            <td className="py-3.5 px-4 font-extrabold text-slate-800 text-right">
+                              {item.student_name}
+                            </td>
+                            <td className="py-3.5 px-4 text-left">
+                              <span className="inline-flex items-center gap-1.5 bg-indigo-50/70 text-indigo-700 font-extrabold text-[11px] px-3.5 py-1.5 rounded-xl border border-indigo-100/30">
+                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                                <span>{item.room}</span>
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>

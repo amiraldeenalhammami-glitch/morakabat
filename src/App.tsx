@@ -20,10 +20,12 @@ import AdminDashboard from './pages/AdminDashboard';
 import AdminSlots from './pages/AdminSlots';
 import AdminStudents from './pages/AdminStudents';
 import AdminSettings from './pages/AdminSettings';
+import AdminPreview from './pages/AdminPreview';
 import PublicLanding from './pages/PublicLanding';
+import OfficerDashboard from './pages/OfficerDashboard';
 
 function HomeRedirect() {
-  const { isAdmin, loading, user } = useAuth();
+  const { isAdmin, isExamOfficer, loading, user } = useAuth();
 
   if (loading) {
     return (
@@ -37,7 +39,15 @@ function HomeRedirect() {
     return <Navigate to="/login" replace />;
   }
 
-  return isAdmin ? <Navigate to="/admin" replace /> : <Navigate to="/dashboard" replace />;
+  if (isAdmin) {
+    return <Navigate to="/admin" replace />;
+  }
+
+  if (isExamOfficer) {
+    return <Navigate to="/officer" replace />;
+  }
+
+  return <Navigate to="/dashboard" replace />;
 }
 
 export default function App() {
@@ -100,6 +110,22 @@ export default function App() {
             <ProtectedRoute adminOnly>
               <Layout>
                 <AdminSettings />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/admin/preview" element={
+            <ProtectedRoute adminOnly>
+              <Layout>
+                <AdminPreview />
+              </Layout>
+            </ProtectedRoute>
+          } />
+
+          {/* Exam Officer Dashboard */}
+          <Route path="/officer" element={
+            <ProtectedRoute officerOnly>
+              <Layout>
+                <OfficerDashboard />
               </Layout>
             </ProtectedRoute>
           } />

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { UserProfile } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
@@ -12,6 +12,7 @@ interface AuthContextType {
   loading: boolean;
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  isExamOfficer: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -20,6 +21,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   isAdmin: false,
   isSuperAdmin: false,
+  isExamOfficer: false,
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -63,7 +65,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Listen to profile changes
         unsubscribeProfile = onSnapshot(doc(db, 'users', firebaseUser.uid), (docSnap) => {
           if (docSnap.exists()) {
-            setProfile({ uid: firebaseUser.uid, ...docSnap.data() } as UserProfile);
+            const data = docSnap.data();
+            setProfile({ uid: firebaseUser.uid, ...data } as UserProfile);
+            
+            if (firebaseUser.emailVerified && !data.email_verified) {
+              updateDoc(doc(db, 'users', firebaseUser.uid), {
+                email_verified: true
+              }).catch(err => {
+                console.error('Failed to sync email verification status:', err);
+              });
+            }
           } else {
             setProfile(null);
           }
@@ -97,6 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isAdmin: profile?.role === 'admin' || 
              user?.email === "amiraldeenalhammami@ab3adacademy.com",
     isSuperAdmin: user?.email === "amiraldeenalhammami@ab3adacademy.com",
+    isExamOfficer: profile?.role === 'exam_officer',
   };
 
   if (quotaExceeded) {

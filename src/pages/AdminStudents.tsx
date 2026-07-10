@@ -726,6 +726,21 @@ export default function AdminStudents() {
                             )}
                           </span>
                           <span className="text-[10px] text-slate-400">{student.email}</span>
+                          {(student.status === 'pending' || !student.status) && (
+                            <div className="mt-1">
+                              {student.email_verified ? (
+                                <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-[10px] px-2 py-0.5 rounded-lg font-bold border border-emerald-200">
+                                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                                  تم تأكيد الإيميل برمجياً
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 bg-rose-50 text-rose-700 text-[10px] px-2 py-0.5 rounded-lg font-bold border border-rose-200">
+                                  <span className="w-1.5 h-1.5 bg-rose-500 rounded-full"></span>
+                                  لم يتم تأكيد الإيميل من قبل المراقب بعد
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>

@@ -10,7 +10,7 @@
         "phone": { "type": "string", "description": "Phone number" },
         "university_id": { "type": "string", "description": "University ID number" },
         "department": { "type": "string", "description": "Department" },
-        "role": { "type": "string", "enum": ["student", "admin"], "description": "User role" },
+        "role": { "type": "string", "enum": ["student", "admin", "exam_officer"], "description": "User role" },
         "photo": { "type": "string", "description": "URL to personal photo" },
         "student_card_image": { "type": "string", "description": "URL to student card image" },
         "required_hours": { "type": "number", "description": "Required invigilation hours" },

@@ -69,6 +69,7 @@ export default function CompleteProfile() {
           avatar_emoji: getRandomEmoji(),
           required_hours: defaultHours,
           createdAt: new Date().toISOString(),
+          email_verified: true,
         };
         
         // Use a timeout for Firestore just in case

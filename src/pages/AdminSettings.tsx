@@ -4,13 +4,13 @@ import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { AppSettings } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
-import { Settings, Save, AlertCircle, CheckCircle, Loader2, Image as ImageIcon, Camera, Shield, UserMinus, UserPlus, Lock, Unlock } from 'lucide-react';
+import { Settings, Save, AlertCircle, CheckCircle, Loader2, Image as ImageIcon, Camera, Shield, UserMinus, UserPlus, Lock, Unlock, Users } from 'lucide-react';
 import { uploadToCloudinary } from '../utils/cloudinary';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { compileAndPublishSchedule } from '../utils/publicSchedule';
 
 export default function AdminSettings() {
-  const { profile, isSuperAdmin } = useAuth();
+  const { profile, isSuperAdmin, isAdmin } = useAuth();
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [loadingAdmins, setLoadingAdmins] = useState(false);
   const [settings, setSettings] = useState<AppSettings>({
@@ -176,7 +176,7 @@ export default function AdminSettings() {
   };
 
   useEffect(() => {
-    if (isSuperAdmin) {
+    if (isSuperAdmin || isAdmin) {
       const fetchUsers = async () => {
         setLoadingAdmins(true);
         try {
@@ -190,7 +190,7 @@ export default function AdminSettings() {
       };
       fetchUsers();
     }
-  }, [isSuperAdmin]);
+  }, [isSuperAdmin, isAdmin]);
 
   const handlePromoteToAdmin = async (userId: string) => {
     const currentAdmins = allUsers.filter(u => u.role === 'admin' || u.email === "amiraldeenalhammami@ab3adacademy.com").length;
@@ -204,6 +204,19 @@ export default function AdminSettings() {
       await updateDoc(doc(db, 'users', userId), { role: 'admin' });
       setAllUsers(prev => prev.map(u => u.uid === userId ? { ...u, role: 'admin' } : u));
       setMessage({ type: 'success', text: 'تمت الترقية إلى مدير بنجاح' });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePromoteToOfficer = async (userId: string) => {
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, 'users', userId), { role: 'exam_officer' });
+      setAllUsers(prev => prev.map(u => u.uid === userId ? { ...u, role: 'exam_officer' } : u));
+      setMessage({ type: 'success', text: 'تمت ترقية العضو إلى موظف امتحانات بنجاح' });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
     } finally {
@@ -711,8 +724,10 @@ export default function AdminSettings() {
         </button>
       </div>
 
-      {isSuperAdmin && (
-        <div className="max-w-2xl bg-white rounded-3xl shadow-sm border border-slate-100 p-8 space-y-8">
+      {(isSuperAdmin || isAdmin) && (
+        <div className="space-y-6">
+          {isSuperAdmin && (
+            <div className="max-w-2xl bg-white rounded-3xl shadow-sm border border-slate-100 p-8 space-y-8">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl shadow-sm">
               <Shield size={24} />
@@ -830,6 +845,69 @@ export default function AdminSettings() {
           </div>
         </div>
       )}
+
+      {/* Exam Officer Management (Admin or Super Admin can access) */}
+      <div className="max-w-2xl bg-white rounded-3xl shadow-sm border border-slate-100 p-8 space-y-8">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-purple-50 text-purple-600 rounded-xl shadow-sm">
+            <Users size={24} />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">إدارة موظفي الامتحانات</h2>
+            <p className="text-sm text-slate-500">ترقية المراقبين إلى موظفي امتحانات لتسهيل رفع القاعات والنتائج</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="font-bold text-slate-900 text-sm">ترقية مراقب إلى موظف امتحانات</h3>
+          <div className="flex gap-3">
+            <select 
+              className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-purple-500 outline-none"
+              onChange={(e) => {
+                if (e.target.value) handlePromoteToOfficer(e.target.value);
+              }}
+              defaultValue=""
+            >
+              <option value="" disabled>اختر مراقباً لترقيته...</option>
+              {activeStudents.map(student => (
+                <option key={student.uid} value={student.uid}>{student.name} ({student.email})</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="border-t border-slate-100 pt-6">
+          <h3 className="font-bold text-slate-900 text-sm mb-4">موظفو الامتحانات الحاليون</h3>
+          <div className="space-y-3">
+            {allUsers.filter(u => u.role === 'exam_officer').length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-2 font-medium">لا يوجد موظفو امتحانات حالياً.</p>
+            ) : (
+              allUsers.filter(u => u.role === 'exam_officer').map(officer => (
+                <div key={officer.uid} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-purple-600 font-bold border border-slate-100">
+                      {officer.name?.charAt(0) || 'O'}
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-900 text-sm">{officer.name}</p>
+                      <p className="text-xs text-slate-500">{officer.email}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleDemoteToStudent(officer.uid)}
+                    className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                    title="سحب الصلاحية وتحويل لمراقب"
+                  >
+                    <UserMinus size={20} />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
     </div>
-  );
+  )}
+</div>
+);
 }

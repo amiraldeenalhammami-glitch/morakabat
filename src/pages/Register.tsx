@@ -41,8 +41,17 @@ export default function Register() {
   const [isEmailInUse, setIsEmailInUse] = useState(false);
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isInIframe, setIsInIframe] = useState(false);
 
   const [globalSettings, setGlobalSettings] = useState<any>(null);
+
+  useEffect(() => {
+    try {
+      setIsInIframe(window.self !== window.top);
+    } catch (e) {
+      setIsInIframe(true);
+    }
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onSnapshot(doc(db, 'settings', 'global'), (docSnap) => {
@@ -65,6 +74,12 @@ export default function Register() {
     setError('');
     setIsEmailInUse(false);
     setSuccess('');
+
+    const arabicRegex = /^[\u0600-\u06FF\s]+$/;
+    if (!arabicRegex.test(formData.name.trim())) {
+      setError('يجب كتابة الاسم باللغة العربية حصراً');
+      return;
+    }
 
     if (formData.password.length < 6) {
       setError('يجب أن تكون كلمة المرور 6 أحرف على الأقل');
@@ -135,6 +150,7 @@ export default function Register() {
         required_hours: 16, // Default
         observer_type: formData.requested_role === 'student' ? formData.observer_type : 'طالب دراسات',
         createdAt: new Date().toISOString(),
+        email_verified: false,
       });
 
       setSuccess('تم إنشاء الحساب بنجاح! تم إرسال رابط التحقق إلى بريدك الإلكتروني. يرجى تفعيل الحساب قبل تسجيل الدخول.');
@@ -148,6 +164,8 @@ export default function Register() {
       if (fullError.includes('email-already-in-use')) {
         setError('هذا البريد الإلكتروني مسجل لدينا بالفعل.');
         setIsEmailInUse(true);
+      } else if (fullError.includes('network-request-failed')) {
+        setError('فشل الاتصال بـ Firebase (Network Request Failed). يحدث هذا عادةً بسبب قيود متصفحك على الإطارات الداخلية (Iframe)، أو مانع الإعلانات، أو حظر ملفات تعريف الارتباط للجهات الخارجية (Third-party cookies). لحل المشكلة فوراً، يرجى الضغط على زر "فتح في نافذة جديدة" بالأعلى لإتمام عملية التسجيل بنجاح.');
       } else if (fullError.includes('internal-error')) {
         setError('حدث خطأ داخلي في الخادم. يرجى التأكد من اتصالك بالإنترنت والمحاولة مرة أخرى.');
       } else {
@@ -166,6 +184,22 @@ export default function Register() {
           <p className="text-slate-500 mt-2 text-center">انضم إلى نظام المراقبات الامتحانية كمراقب</p>
           <p className="text-xs text-slate-400 mt-1">جامعة دمشق كلية الهندسة المعمارية</p>
         </div>
+
+        {isInIframe && (
+          <div className="mb-6 p-4 bg-indigo-50 border border-indigo-100 rounded-2xl text-right animate-pulse">
+            <p className="text-xs text-indigo-900 leading-relaxed font-bold">
+              💡 لتجنب أخطاء التسجيل والشبكة (مثل حظر ملفات تعريف الارتباط في الإطار الداخلي)، يرجى فتح التطبيق في نافذة مستقلة كاملة:
+            </p>
+            <a 
+              href={window.location.href} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="mt-2.5 inline-flex items-center gap-1.5 bg-indigo-600 text-white text-[11px] font-bold px-4 py-2 rounded-xl hover:bg-indigo-700 transition-all shadow-md shadow-indigo-150"
+            >
+              <span>فتح في نافذة جديدة ↗</span>
+            </a>
+          </div>
+        )}
 
         {error && (
           <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-2xl flex flex-col gap-3 text-sm">

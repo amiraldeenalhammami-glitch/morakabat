@@ -284,7 +284,22 @@ export default function StudentDashboard() {
       )}
 
       {profile?.status !== 'active' ? (
-        <div className="bg-white p-12 rounded-3xl shadow-sm border border-slate-100 text-center space-y-4">
+        <div className="space-y-6">
+          {profile?.status === 'pending' && !profile?.email_verified && !user?.emailVerified && (
+            <div className="bg-amber-50 border-2 border-amber-300 p-8 rounded-3xl text-right space-y-4 shadow-md animate-pulse">
+              <div className="flex items-center gap-3 text-amber-800">
+                <AlertCircle size={28} className="shrink-0" />
+                <h3 className="text-lg font-extrabold">تنبيه هام: تأكيد الحساب مطلوب</h3>
+              </div>
+              <p className="text-amber-900 font-medium leading-relaxed text-sm md:text-base text-justify whitespace-pre-line">
+                السيد الزميل المراقب، يرجى التكرم بالدخول إلى بريدكم الإلكتروني لتأكيد الحساب، وذلك حتى يتسنى للمشرف العام مراجعة وطلب تفعيل حسابكم بنجاح.
+                {"\n"}
+                تنويه: قد تظهر رسالة التأكيد أحياناً في مجلد (الرسائل غير المرغوب فيها / Spam أو Junk). في حال عدم العثور عليها في الوارد الرئيسي، يرجى تفقّد القائمة الجانبية لبريدكم واختيار 'المزيد' (More) ثم الدخول لمجلد الرسائل غير المرغوب فيها، وافتح رسالة التأكيد واضغط على الرابط المرفق.
+              </p>
+            </div>
+          )}
+
+          <div className="bg-white p-12 rounded-3xl shadow-sm border border-slate-100 text-center space-y-4">
           <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 ${profile?.status === 'frozen' ? 'bg-rose-50 text-rose-500' : 'bg-amber-50 text-amber-500'}`}>
             {profile?.status === 'frozen' ? <XCircle size={40} /> : <Clock size={40} />}
           </div>
@@ -303,6 +318,7 @@ export default function StudentDashboard() {
             >
               انتقل للملف الشخصي لاستكمال البيانات
             </button>
+          </div>
           </div>
         </div>
       ) : (

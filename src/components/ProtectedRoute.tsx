@@ -5,10 +5,11 @@ import { useAuth } from '../contexts/AuthContext';
 interface ProtectedRouteProps {
   children: React.ReactNode;
   adminOnly?: boolean;
+  officerOnly?: boolean;
 }
 
-export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, adminOnly = false }) => {
-  const { user, profile, loading, isAdmin } = useAuth();
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, adminOnly = false, officerOnly = false }) => {
+  const { user, profile, loading, isAdmin, isExamOfficer } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -31,9 +32,18 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, adminO
     return <Navigate to="/dashboard" replace />;
   }
 
+  if (officerOnly && !isExamOfficer) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   // If user is admin but on a student route (specifically /dashboard), redirect to /admin
-  if (!adminOnly && isAdmin && location.pathname === '/dashboard') {
+  if (!adminOnly && !officerOnly && isAdmin && location.pathname === '/dashboard') {
     return <Navigate to="/admin" replace />;
+  }
+
+  // If user is exam officer but on a student route, redirect to /officer
+  if (!adminOnly && !officerOnly && isExamOfficer && location.pathname === '/dashboard') {
+    return <Navigate to="/officer" replace />;
   }
 
   return <>{children}</>;
