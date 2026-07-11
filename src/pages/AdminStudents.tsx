@@ -6,6 +6,7 @@ import { UserProfile, Booking, AppSettings, ExamSlot } from '../types';
 import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
 import { Search, Mail, Phone, IdCard, Clock, Loader2, Edit2, Download, Trash2, ChevronDown, CheckCircle2, XCircle, MessageSquare, Save, Image as ImageIcon, Check, X } from 'lucide-react';
 import SecurityConfirmModal from '../components/SecurityConfirmModal';
+import NoteInputWithModal from '../components/NoteInputWithModal';
 
 // Admin Note Input Component for better state management
 const AdminNoteInput = ({ 
@@ -15,50 +16,15 @@ const AdminNoteInput = ({
   initialValue: string, 
   onSave: (val: string) => void 
 }) => {
-  const [value, setValue] = useState(initialValue);
-  const [isSaving, setIsSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
-
-  useEffect(() => {
-    setValue(initialValue);
-    setHasChanges(false);
-  }, [initialValue]);
-
-  const handleSave = async () => {
-    if (!hasChanges) return;
-    setIsSaving(true);
-    try {
-      await onSave(value);
-      setHasChanges(false);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   return (
-    <div className="relative group">
-      <MessageSquare size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
-      <input 
-        type="text"
+    <div className="w-56">
+      <NoteInputWithModal
+        initialValue={initialValue}
+        onSave={onSave}
         placeholder="ملاحظة للمراقب..."
-        value={value}
-        onChange={(e) => {
-          setValue(e.target.value);
-          setHasChanges(true);
-        }}
-        onBlur={handleSave}
-        onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-        className="w-full text-xs bg-slate-50 border border-slate-100 rounded-xl pr-9 pl-10 py-2 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+        label="ملاحظة الإدارة على المراقب"
+        rows={2}
       />
-      {hasChanges && (
-        <button 
-          onClick={handleSave}
-          className="absolute left-2 top-1/2 -translate-y-1/2 text-indigo-600 hover:text-indigo-800 p-1"
-          title="حفظ"
-        >
-          {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-        </button>
-      )}
     </div>
   );
 };
@@ -598,23 +564,16 @@ export default function AdminStudents() {
             <div className="flex items-center justify-between">
               <label className="block text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg">ملاحظة المراقبين النشطين</label>
             </div>
-            <div className="relative flex gap-2">
-              <input
-                type="text"
-                placeholder="اكتب ملاحظة للمراقبين النشطين..."
-                value={activeNote}
-                onChange={(e) => setActiveNote(e.target.value)}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-              />
-              <button
-                onClick={() => handleSaveGroupNote('active', activeNote)}
-                disabled={isSavingActive}
-                className="bg-indigo-600 text-white p-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50 shrink-0 flex items-center justify-center"
-                title="حفظ"
-              >
-                {isSavingActive ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-              </button>
-            </div>
+            <NoteInputWithModal
+              initialValue={activeNote}
+              onSave={(val) => {
+                setActiveNote(val);
+                return handleSaveGroupNote('active', val);
+              }}
+              placeholder="اكتب ملاحظة للمراقبين النشطين..."
+              label="ملاحظة جماعية للمراقبين النشطين"
+              rows={2}
+            />
           </div>
 
           {/* Frozen Note */}
@@ -622,23 +581,16 @@ export default function AdminStudents() {
             <div className="flex items-center justify-between">
               <label className="block text-[11px] font-bold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg">ملاحظة المراقبين المجمدين</label>
             </div>
-            <div className="relative flex gap-2">
-              <input
-                type="text"
-                placeholder="اكتب ملاحظة للمراقبين المجمدين..."
-                value={frozenNote}
-                onChange={(e) => setFrozenNote(e.target.value)}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-              />
-              <button
-                onClick={() => handleSaveGroupNote('frozen', frozenNote)}
-                disabled={isSavingFrozen}
-                className="bg-indigo-600 text-white p-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50 shrink-0 flex items-center justify-center"
-                title="حفظ"
-              >
-                {isSavingFrozen ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-              </button>
-            </div>
+            <NoteInputWithModal
+              initialValue={frozenNote}
+              onSave={(val) => {
+                setFrozenNote(val);
+                return handleSaveGroupNote('frozen', val);
+              }}
+              placeholder="اكتب ملاحظة للمراقبين المجمدين..."
+              label="ملاحظة جماعية للمراقبين المجمدين"
+              rows={2}
+            />
           </div>
 
           {/* Pending Note */}
@@ -646,23 +598,16 @@ export default function AdminStudents() {
             <div className="flex items-center justify-between">
               <label className="block text-[11px] font-bold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-lg">ملاحظة المراقبين المعلقين</label>
             </div>
-            <div className="relative flex gap-2">
-              <input
-                type="text"
-                placeholder="اكتب ملاحظة للمراقبين المعلقين..."
-                value={pendingNote}
-                onChange={(e) => setPendingNote(e.target.value)}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-              />
-              <button
-                onClick={() => handleSaveGroupNote('pending', pendingNote)}
-                disabled={isSavingPending}
-                className="bg-indigo-600 text-white p-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50 shrink-0 flex items-center justify-center"
-                title="حفظ"
-              >
-                {isSavingPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-              </button>
-            </div>
+            <NoteInputWithModal
+              initialValue={pendingNote}
+              onSave={(val) => {
+                setPendingNote(val);
+                return handleSaveGroupNote('pending', val);
+              }}
+              placeholder="اكتب ملاحظة للمراقبين المعلقين..."
+              label="ملاحظة جماعية للمراقبين المعلقين"
+              rows={2}
+            />
           </div>
         </div>
       </div>
@@ -937,14 +882,14 @@ export default function AdminStudents() {
                                       </div>
                                     </div>
                                     
-                                    <div className="flex-1 flex items-center gap-2">
-                                      <MessageSquare size={14} className="text-slate-400" />
-                                      <input 
-                                        type="text"
-                                        placeholder="إضافة ملاحظات..."
-                                        defaultValue={booking.admin_notes || ''}
-                                        onBlur={(e) => handleUpdateNotes(booking.id, e.target.value)}
-                                        className="flex-1 text-xs bg-slate-50 border-none rounded-lg px-3 py-2 focus:ring-1 focus:ring-indigo-500 outline-none"
+                                    <div className="flex-1">
+                                      <NoteInputWithModal
+                                        initialValue={booking.admin_notes || ''}
+                                        onSave={(val) => handleUpdateNotes(booking.id, val)}
+                                        placeholder="إضافة ملاحظات للحجز..."
+                                        label="ملاحظة الإدارة على هذا الحجز"
+                                        rows={1}
+                                        inputClassName="bg-slate-50 border-none rounded-xl"
                                       />
                                     </div>
                                   </div>

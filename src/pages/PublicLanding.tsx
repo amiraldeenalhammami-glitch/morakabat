@@ -473,7 +473,7 @@ export default function PublicLanding({ isPreview = false }: { isPreview?: boole
                             <p>لا توجد امتحانات مضافة لهذه السنة بعد.</p>
                           </div>
                         ) : (
-                          <div className="overflow-x-auto touch-pan-x mt-4">
+                          <div className="overflow-x-auto mt-4">
                             <table className="w-full text-right text-sm border-collapse min-w-[600px] md:min-w-full">
                               <thead>
                                 <tr className="border-b border-slate-100 text-slate-500 text-xs bg-slate-50/50">
@@ -698,7 +698,7 @@ export default function PublicLanding({ isPreview = false }: { isPreview?: boole
                 </div>
               ) : (
                 <div className="border border-slate-100 rounded-3xl bg-white overflow-hidden shadow-xs" style={{ userSelect: 'none' }}>
-                  <div className="overflow-x-auto touch-pan-x">
+                  <div className="overflow-x-auto">
                     <table className="w-full text-right text-xs border-collapse">
                       <thead>
                         <tr className="bg-slate-50 text-slate-600 font-extrabold border-b border-slate-100">
@@ -862,7 +862,7 @@ export default function PublicLanding({ isPreview = false }: { isPreview?: boole
                   </div>
                 ) : (
                   <div className="border border-slate-100 rounded-2xl bg-white overflow-hidden shadow-xs">
-                    <div className="overflow-x-auto touch-pan-x">
+                    <div className="overflow-x-auto">
                       <table className="w-full text-right text-xs border-collapse min-w-[600px]">
                         <thead>
                           <tr className="bg-slate-50 text-slate-600 font-bold border-b border-slate-100">

@@ -639,25 +639,24 @@ export default function AdminSettings() {
           </div>
 
           {/* رابط مبرمج النظام (للسوبر أدمن فقط) */}
-          <div className="md:col-span-2 border-t border-slate-100 pt-6">
-            <label className="block text-sm font-bold text-slate-700 mb-2">رابط حساب مبرمج النظام (المهندس أمير الدين)</label>
-            <div className="relative">
-              <Shield size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                disabled={!isSuperAdmin}
-                placeholder={isSuperAdmin ? "أدخل رابط فيسبوك المبرمج الجديد..." : "••••••••"}
-                value={isSuperAdmin ? (settings.developer_fb_link || '') : "••••••••"}
-                onChange={(e) => setSettings({ ...settings, developer_fb_link: e.target.value })}
-                className="w-full pr-12 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-sans font-medium text-slate-900"
-              />
+          {isSuperAdmin && (
+            <div className="md:col-span-2 border-t border-slate-100 pt-6">
+              <label className="block text-sm font-bold text-slate-700 mb-2">رابط حساب مبرمج النظام (المهندس أمير الدين)</label>
+              <div className="relative">
+                <Shield size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="أدخل رابط فيسبوك المبرمج الجديد..."
+                  value={settings.developer_fb_link || ''}
+                  onChange={(e) => setSettings({ ...settings, developer_fb_link: e.target.value })}
+                  className="w-full pr-12 pl-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none font-sans font-medium text-slate-900"
+                />
+              </div>
+              <p className="text-xs text-slate-400 mt-2">
+                هذا الحقل خاص بـ Super Admin لتحديث الرابط التشعبي للمهندس أمير الدين الحمامي في أسفل لوحة التحكم وبقية واجهات التطبيق.
+              </p>
             </div>
-            <p className="text-xs text-slate-400 mt-2">
-              {isSuperAdmin
-                ? "هذا الحقل خاص بـ Super Admin لتحديث الرابط التشعبي للمهندس أمير الدين الحمامي في أسفل لوحة التحكم وبقية واجهات التطبيق."
-                : "رابط مبرمج النظام يظهر ويتم تعديله فقط بواسطة السوبر أدمن."}
-            </p>
-          </div>
+          )}
 
           {/* New fields for surplus trimming grace period */}
           <div className="md:col-span-2 border-t border-slate-100 pt-6 space-y-4">

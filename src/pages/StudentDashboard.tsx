@@ -7,6 +7,7 @@ import { handleFirestoreError, OperationType } from '../utils/errorHandlers';
 import { Clock, CheckCircle, AlertCircle, Calendar as CalendarIcon, MessageSquare, CheckCircle2, XCircle, Download, Bell, MapPin } from 'lucide-react';
 import { usePWA } from '../hooks/usePWA';
 import { getSlotRooms, getObserverRoom } from '../utils/roomUtils';
+import NoteInputWithModal from '../components/NoteInputWithModal';
 
 export default function StudentDashboard() {
   const { profile, user } = useAuth();
@@ -227,18 +228,16 @@ export default function StudentDashboard() {
               <span>تنزيل التطبيق</span>
             </button>
           )}
-          <div className="w-full md:w-64">
+          <div className="w-full md:w-80">
             <label className="block text-[10px] text-slate-400 font-medium mb-1 mr-2">ملاحظة للأدمن</label>
-            <div className="relative">
-              <MessageSquare size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input 
-                type="text"
-                placeholder="اكتب ملاحظة للأدمن..."
-                defaultValue={profile?.student_note || ''}
-                onBlur={(e) => handleUpdateStudentNote(e.target.value)}
-                className="w-full text-xs bg-white border border-slate-200 rounded-xl pr-9 pl-3 py-2.5 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm transition-all"
-              />
-            </div>
+            <NoteInputWithModal
+              initialValue={profile?.student_note || ''}
+              onSave={handleUpdateStudentNote}
+              placeholder="اكتب ملاحظة للأدمن..."
+              label="تحديث ملاحظتك للأدمن"
+              rows={2}
+              inputClassName="bg-white shadow-xs"
+            />
           </div>
         </div>
       </header>
