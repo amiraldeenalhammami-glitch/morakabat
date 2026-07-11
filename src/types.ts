@@ -38,7 +38,7 @@ export interface ExamSlot {
   required_invigilators: number;
   current_invigilators?: number; // Track current bookings
   location?: string;
-  academic_year: 1 | 2 | 3 | 4 | 5;
+  academic_year: 1 | 2 | 3 | 4 | 5 | 6 | 7;
   duration_hours?: number; // Duration of exam in hours (e.g. 1, 2, 3, 4, 5)
   isDeleted?: boolean;
 

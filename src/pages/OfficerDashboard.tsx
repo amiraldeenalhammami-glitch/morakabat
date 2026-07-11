@@ -150,7 +150,7 @@ export default function OfficerDashboard() {
     session_type: 'morning' as 'morning' | 'evening',
     required_invigilators: 2,
     location: '',
-    academic_year: 1 as 1 | 2 | 3 | 4 | 5,
+    academic_year: 1 as 1 | 2 | 3 | 4 | 5 | 6 | 7,
     duration_hours: 2,
     observers_per_room: 3,
     has_studios: false,
@@ -351,7 +351,7 @@ export default function OfficerDashboard() {
   };
 
   // Group slots by academic year, sorted by date (oldest first) then start time
-  const groupedSlots = [1, 2, 3, 4, 5].reduce((acc, year) => {
+  const groupedSlots = [1, 2, 3, 4, 5, 6, 7].reduce((acc, year) => {
     acc[year] = slots
       .filter(s => s.academic_year === year && s.isDeleted !== true)
       .sort((a, b) => {
@@ -529,6 +529,7 @@ export default function OfficerDashboard() {
 
   const handleSlotsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saveLoading) return;
     setSaveLoading(true);
     try {
       const roomsCount = getRoomsCount(slotsFormData);
@@ -816,7 +817,7 @@ export default function OfficerDashboard() {
 
   const handleExportSlotsCSV = () => {
     const headers = ['اسم المادة', 'السنة الدراسية', 'تاريخ المادة', 'وقت البدء', 'مدة الامتحان'];
-    const years = [1, 2, 3, 4, 5];
+    const years = [1, 2, 3, 4, 5, 6, 7];
 
     let csvRows: string[] = [];
     csvRows.push('النسخة النهائية من البرنامج الامتحاني');
@@ -829,7 +830,12 @@ export default function OfficerDashboard() {
         .sort((a, b) => a.exam_date.localeCompare(b.exam_date));
         
       if (yearSlots.length > 0) {
-        csvRows.push(`--- مواد السنة ${yearNames[yr - 1]} ---`);
+        const getCsvYearHeader = (yrNum: number) => {
+          if (yrNum === 6) return 'مواد ماجستير أكاديمي';
+          if (yrNum === 7) return 'مواد ماجستير تأهيل وتخصص';
+          return `مواد السنة ${yearNames[yrNum - 1]}`;
+        };
+        csvRows.push(`--- ${getCsvYearHeader(yr)} ---`);
         
         yearSlots.forEach(s => {
           let duration = s.duration_hours || 2;
@@ -880,7 +886,7 @@ export default function OfficerDashboard() {
     return ranges.map(r => `${r.type} (${r.from}-${r.to})`).join('، ');
   };
 
-  const yearNames = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة'];
+  const yearNames = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة', 'ماجستير أكاديمي', 'ماجستير تأهيل وتخصص'];
 
   if (loading) {
     return (
@@ -963,11 +969,11 @@ export default function OfficerDashboard() {
           </div>
 
           <div className="space-y-4">
-            {[1, 2, 3, 4, 5].map((year) => {
+            {[1, 2, 3, 4, 5, 6, 7].map((year) => {
               const yearSlots = groupedSlots[year] || [];
               return (
                 <div key={year} className="bg-white border border-slate-100 rounded-3xl p-6 shadow-xs space-y-4">
-                  {/* Clickable Header for Collapsible Year Section */}
+                   {/* Clickable Header for Collapsible Year Section */}
                   <div 
                     onClick={() => toggleYear(year)}
                     className="flex items-center justify-between cursor-pointer select-none group transition-all"
@@ -984,7 +990,9 @@ export default function OfficerDashboard() {
                       </span>
                       <h3 className="font-extrabold text-slate-800 text-base flex items-center gap-2 group-hover:text-purple-700 transition-colors">
                         <span className="w-2.5 h-2.5 rounded-full bg-purple-600" />
-                        <span>السنة {yearNames[year - 1]}</span>
+                        <span>
+                          {year === 6 ? 'ماجستير أكاديمي' : year === 7 ? 'ماجستير تأهيل وتخصص' : `السنة ${yearNames[year - 1]}`}
+                        </span>
                       </h3>
                     </div>
                     <span className="text-xs bg-slate-100 group-hover:bg-purple-50 group-hover:text-purple-700 px-3 py-1 rounded-full text-slate-600 font-bold transition-all">
@@ -1148,7 +1156,7 @@ export default function OfficerDashboard() {
 
           {/* Years Accordion List */}
           <div className="space-y-4">
-            {[1, 2, 3, 4, 5].map((year) => {
+            {[1, 2, 3, 4, 5, 6, 7].map((year) => {
               const yearSlots = slots
                 .filter(s => s.academic_year === year && s.isDeleted !== true)
                 .sort((a, b) => {
@@ -1183,7 +1191,9 @@ export default function OfficerDashboard() {
                       </span>
                       <h3 className="font-extrabold text-slate-800 text-base flex items-center gap-2 group-hover:text-purple-700 transition-colors">
                         <span className="w-2.5 h-2.5 rounded-full bg-purple-600" />
-                        <span>السنة {yearNames[year - 1]}</span>
+                        <span>
+                          {year === 6 ? 'ماجستير أكاديمي' : year === 7 ? 'ماجستير تأهيل وتخصص' : `السنة ${yearNames[year - 1]}`}
+                        </span>
                       </h3>
                     </div>
                     <span className="text-xs bg-slate-100 group-hover:bg-purple-50 group-hover:text-purple-700 px-3 py-1 rounded-full text-slate-600 font-bold transition-all">
@@ -1743,7 +1753,11 @@ export default function OfficerDashboard() {
                     onChange={(e) => setSlotsFormData({ ...slotsFormData, academic_year: parseInt(e.target.value) as any })}
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 outline-none font-bold text-slate-800"
                   >
-                    {[1, 2, 3, 4, 5].map(y => <option key={y} value={y}>السنة {yearNames[y-1]}</option>)}
+                    {[1, 2, 3, 4, 5, 6, 7].map(y => (
+                      <option key={y} value={y}>
+                        {y === 6 ? 'ماجستير أكاديمي' : y === 7 ? 'ماجستير تأهيل وتخصص' : `السنة ${yearNames[y-1]}`}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -2077,7 +2091,9 @@ export default function OfficerDashboard() {
                         {parsedSlots.map((item, idx) => (
                           <tr key={idx} className="hover:bg-slate-50/50">
                             <td className="p-2.5 font-bold text-slate-950">{item.course_name}</td>
-                            <td className="p-2.5 font-semibold text-purple-700">السنة {yearNames[item.academic_year - 1]}</td>
+                            <td className="p-2.5 font-semibold text-purple-700">
+                              {item.academic_year === 6 ? 'ماجستير أكاديمي' : item.academic_year === 7 ? 'ماجستير تأهيل وتخصص' : `السنة ${yearNames[item.academic_year - 1]}`}
+                            </td>
                             <td className="p-2.5 text-slate-500">{item.exam_date} | {item.start_time}</td>
                           </tr>
                         ))}

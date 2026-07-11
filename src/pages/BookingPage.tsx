@@ -536,9 +536,9 @@ export default function BookingPage() {
         </div>
       ) : (
         <div className="space-y-12">
-          {[1, 2, 3, 4, 5].map((year) => {
+          {[1, 2, 3, 4, 5, 6, 7].map((year) => {
             const yearSlots = slots.filter(s => s.academic_year === year);
-            const yearNames = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة'];
+            const yearNames = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة', 'ماجستير أكاديمي', 'ماجستير تأهيل وتخصص'];
             
             if (yearSlots.length === 0) return null;
 
@@ -546,7 +546,9 @@ export default function BookingPage() {
               <section key={year} className="space-y-6">
                 <div className="flex items-center gap-4">
                   <div className="h-px flex-1 bg-slate-200" />
-                  <h2 className="text-xl font-bold text-slate-400 px-4">السنة {yearNames[year - 1]}</h2>
+                  <h2 className="text-xl font-bold text-slate-400 px-4">
+                    {year === 6 ? 'ماجستير أكاديمي' : year === 7 ? 'ماجستير تأهيل وتخصص' : `السنة ${yearNames[year - 1]}`}
+                  </h2>
                   <div className="h-px flex-1 bg-slate-200" />
                 </div>
                 
@@ -658,7 +660,7 @@ interface SlotCardProps {
 
 function SlotCard({ slot, isBooked, allBookings, studentId, currentInvigilators, actionLoading, isRegistrationActive, onBook, onCancel, showDate }: SlotCardProps) {
   const isFull = currentInvigilators >= slot.required_invigilators;
-  const yearNames = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة'];
+  const yearNames = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة', 'ماجستير أكاديمي', 'ماجستير تأهيل وتخصص'];
 
   // Calculate student assigned room if booked
   const slotBookingsList = allBookings.filter(b => b.slot_id === slot.id);
@@ -700,7 +702,9 @@ function SlotCard({ slot, isBooked, allBookings, studentId, currentInvigilators,
               })()}
             </span>
           ) : (
-            <span className="text-[10px] font-bold text-slate-400">السنة {yearNames[slot.academic_year - 1]}</span>
+            <span className="text-[10px] font-bold text-slate-400">
+              {slot.academic_year === 6 ? 'ماجستير أكاديمي' : slot.academic_year === 7 ? 'ماجستير تأهيل وتخصص' : `السنة ${yearNames[slot.academic_year - 1]}`}
+            </span>
           )}
         </div>
         {isBooked && (

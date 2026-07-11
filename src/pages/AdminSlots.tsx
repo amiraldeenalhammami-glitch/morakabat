@@ -18,6 +18,7 @@ export default function AdminSlots() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [students, setStudents] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSlot, setEditingSlot] = useState<ExamSlot | null>(null);
   const [expandedYear, setExpandedYear] = useState<number | null>(1);
@@ -67,7 +68,7 @@ export default function AdminSlots() {
     session_type: 'morning' as 'morning' | 'evening',
     required_invigilators: 2,
     location: '',
-    academic_year: 1 as 1 | 2 | 3 | 4 | 5,
+    academic_year: 1 as 1 | 2 | 3 | 4 | 5 | 6 | 7,
     duration_hours: 2,
     observers_per_room: 3,
     has_studios: false,
@@ -136,8 +137,8 @@ export default function AdminSlots() {
 
   const handleDownloadCSV = () => {
     const headers = ['اسم المادة', 'السنة الدراسية', 'تاريخ المادة', 'وقت البدء', 'مدة الامتحان'];
-    const yearNames = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة'];
-    const years = [1, 2, 3, 4, 5];
+    const yearNames = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة', 'ماجستير أكاديمي', 'ماجستير تأهيل وتخصص'];
+    const years = [1, 2, 3, 4, 5, 6, 7];
 
     let csvRows: string[] = [];
     csvRows.push('النسخة النهائية من البرنامج الامتحاني');
@@ -151,7 +152,12 @@ export default function AdminSlots() {
         
       if (yearSlots.length > 0) {
         // Add a clear divider row for this academic year
-        csvRows.push(`--- مواد السنة ${yearNames[yr - 1]} ---`);
+        const getCsvYearHeader = (yrNum: number) => {
+          if (yrNum === 6) return 'مواد ماجستير أكاديمي';
+          if (yrNum === 7) return 'مواد ماجستير تأهيل وتخصص';
+          return `مواد السنة ${yearNames[yrNum - 1]}`;
+        };
+        csvRows.push(`--- ${getCsvYearHeader(yr)} ---`);
         
         yearSlots.forEach(s => {
           let duration = s.duration_hours || 2;
@@ -255,6 +261,8 @@ export default function AdminSlots() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
+    setIsSaving(true);
     try {
       const roomsCount = getRoomsCount(formData);
       const reqInvigilators = roomsCount > 0 
@@ -372,6 +380,8 @@ export default function AdminSlots() {
       resetForm();
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'exam_slots');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -970,8 +980,8 @@ export default function AdminSlots() {
     return <div className="flex items-center justify-center py-20"><Loader2 className="animate-spin text-indigo-600" size={40} /></div>;
   }
 
-  const years = [1, 2, 3, 4, 5];
-  const yearNames = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة'];
+  const years = [1, 2, 3, 4, 5, 6, 7];
+  const yearNames = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة', 'ماجستير أكاديمي', 'ماجستير تأهيل وتخصص'];
 
   return (
     <div className="space-y-8 text-right" dir="rtl">
@@ -1087,7 +1097,9 @@ export default function AdminSlots() {
                     {year}
                   </div>
                   <div className="text-right">
-                    <h2 className="text-xl font-bold text-slate-900">برنامج السنة {yearNames[year - 1]}</h2>
+                    <h2 className="text-xl font-bold text-slate-900">
+                      {year === 6 ? 'برنامج ماجستير أكاديمي' : year === 7 ? 'برنامج ماجستير تأهيل وتخصص' : `برنامج السنة ${yearNames[year - 1]}`}
+                    </h2>
                     <p className="text-sm text-slate-500">{yearSlots.length} مواد مضافة</p>
                   </div>
                 </div>
@@ -1421,7 +1433,11 @@ export default function AdminSlots() {
                     onChange={(e) => setFormData({ ...formData, academic_year: parseInt(e.target.value) as any })}
                     className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
                   >
-                    {years.map(y => <option key={y} value={y}>السنة {yearNames[y-1]}</option>)}
+                    {years.map(y => (
+                      <option key={y} value={y}>
+                        {y === 6 ? 'ماجستير أكاديمي' : y === 7 ? 'ماجستير تأهيل وتخصص' : `السنة ${yearNames[y-1]}`}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
@@ -1628,7 +1644,14 @@ export default function AdminSlots() {
             </div>
 
             <div className="p-6 border-t bg-slate-50 flex gap-3 shrink-0">
-              <button type="submit" className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors">حفظ</button>
+              <button 
+                type="submit" 
+                disabled={isSaving}
+                className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isSaving && <Loader2 className="animate-spin" size={18} />}
+                <span>حفظ</span>
+              </button>
               <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-bold hover:bg-slate-200 transition-colors">إلغاء</button>
             </div>
           </form>
@@ -1767,11 +1790,13 @@ export default function AdminSlots() {
                       </thead>
                       <tbody className="divide-y divide-slate-100 bg-white">
                         {parsedSlots.map((s, idx) => {
-                          const yearNamesShort = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة'];
+                          const yearNamesShort = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة', 'ماجستير أكاديمي', 'ماجستير تأهيل وتخصص'];
                           return (
                             <tr key={idx} className="hover:bg-slate-50">
                               <td className="p-2 text-slate-800 font-bold">{s.course_name}</td>
-                              <td className="p-2 text-slate-500 font-semibold">السنة {yearNamesShort[s.academic_year - 1] || s.academic_year}</td>
+                              <td className="p-2 text-slate-500 font-semibold">
+                                {s.academic_year === 6 ? 'ماجستير أكاديمي' : s.academic_year === 7 ? 'ماجستير تأهيل وتخصص' : `السنة ${yearNamesShort[s.academic_year - 1] || s.academic_year}`}
+                              </td>
                               <td className="p-2 text-slate-500 font-medium">
                                 <div>{s.exam_date}</div>
                                 <div className="text-[10px] text-slate-400">{s.start_time} - {s.end_time}</div>

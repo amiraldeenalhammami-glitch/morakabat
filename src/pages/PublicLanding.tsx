@@ -11,8 +11,8 @@ import {
   Trophy, Award, Check, Star, Info, TrendingUp, Sparkles, BookOpen
 } from 'lucide-react';
 
-const academicYearsList = [1, 2, 3, 4, 5];
-const yearNames = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة'];
+const academicYearsList = [1, 2, 3, 4, 5, 6, 7];
+const yearNames = ['الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة', 'ماجستير أكاديمي', 'ماجستير تأهيل وتخصص'];
 
 export default function PublicLanding({ isPreview = false }: { isPreview?: boolean }) {
   const { user, isAdmin, isExamOfficer } = useAuth();
@@ -456,7 +456,9 @@ export default function PublicLanding({ isPreview = false }: { isPreview?: boole
                           {year}
                         </div>
                         <div>
-                          <span className="text-base font-bold">برنامج السنة {yearNames[year - 1]}</span>
+                          <span className="text-base font-bold">
+                            {year === 6 ? 'برنامج ماجستير أكاديمي' : year === 7 ? 'برنامج ماجستير تأهيل وتخصص' : `برنامج السنة ${yearNames[year - 1]}`}
+                          </span>
                           <span className="text-xs text-slate-400 font-sans font-normal block mt-0.5">{yearSlots.length} مواد مجدولة</span>
                         </div>
                       </div>
@@ -572,7 +574,9 @@ export default function PublicLanding({ isPreview = false }: { isPreview?: boole
                           {year}
                         </div>
                         <div>
-                          <span className="text-base font-bold">نتائج وعلامات السنة {yearNames[year - 1]}</span>
+                          <span className="text-base font-bold">
+                            {year === 6 ? 'نتائج وعلامات ماجستير أكاديمي' : year === 7 ? 'نتائج وعلامات ماجستير تأهيل وتخصص' : `نتائج وعلامات السنة ${yearNames[year - 1]}`}
+                          </span>
                           <span className="text-xs text-slate-400 font-sans font-normal block mt-0.5">{yearSlots.length} مقررات امتحانية</span>
                         </div>
                       </div>
@@ -600,7 +604,7 @@ export default function PublicLanding({ isPreview = false }: { isPreview?: boole
                                 >
                                   <div>
                                     <span className="text-[10px] text-purple-600 font-bold block mb-1">
-                                      برنامج السنة {yearNames[slot.academic_year - 1]}
+                                      {slot.academic_year === 6 ? 'ماجستير أكاديمي' : slot.academic_year === 7 ? 'ماجستير تأهيل وتخصص' : `برنامج السنة ${yearNames[slot.academic_year - 1]}`}
                                     </span>
                                     <h4 className="font-extrabold text-slate-900 text-base leading-tight">
                                       {slot.course_name}
@@ -780,7 +784,7 @@ export default function PublicLanding({ isPreview = false }: { isPreview?: boole
               <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 flex-row-reverse">
                 <div className="text-right space-y-1">
                   <span className="text-[10px] bg-purple-50 text-purple-700 px-2.5 py-1 rounded-full font-bold font-sans">
-                    نتائج السنة {yearNames[activeSubjectForResults.academic_year - 1]}
+                    {activeSubjectForResults.academic_year === 6 ? 'نتائج ماجستير أكاديمي' : activeSubjectForResults.academic_year === 7 ? 'نتائج ماجستير تأهيل وتخصص' : `نتائج السنة ${yearNames[activeSubjectForResults.academic_year - 1]}`}
                   </span>
                   <h3 className="text-lg font-black text-slate-900 mt-1">
                     جدول علامات مادة: {activeSubjectForResults.course_name}

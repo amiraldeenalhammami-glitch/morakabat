@@ -23,6 +23,8 @@ function parseArabicYear(text: string): number {
   const converted = convertArabicNumerals(text.trim());
   const normalized = cleanArabicText(converted);
   
+  if (normalized.includes('اكاديم') || normalized === '6') return 6;
+  if (normalized.includes('تاهيل') || normalized.includes('تخصص') || normalized === '7') return 7;
   if (normalized.includes('الاولي') || normalized.includes('الاول') || normalized === '1') return 1;
   if (normalized.includes('الثانيه') || normalized.includes('الثاني') || normalized === '2') return 2;
   if (normalized.includes('الثالثه') || normalized.includes('الثالث') || normalized === '3') return 3;
@@ -30,7 +32,7 @@ function parseArabicYear(text: string): number {
   if (normalized.includes('الخامسه') || normalized.includes('الخامس') || normalized === '5') return 5;
   
   const num = parseInt(normalized);
-  if (!isNaN(num) && num >= 1 && num <= 5) return num;
+  if (!isNaN(num) && num >= 1 && num <= 7) return num;
   return 1; // Default fallback
 }
 
