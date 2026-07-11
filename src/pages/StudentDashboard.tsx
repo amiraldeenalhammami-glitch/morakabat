@@ -19,6 +19,14 @@ export default function StudentDashboard() {
   const [currentNote, setCurrentNote] = useState<GroupNote | null>(null);
   const { canInstall, installApp } = usePWA();
   const [trimTimeLeft, setTrimTimeLeft] = useState<string>('');
+  const [timeTick, setTimeTick] = useState<number>(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeTick(Date.now());
+    }, 15000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!profile?.uid) return;
@@ -130,10 +138,111 @@ export default function StudentDashboard() {
     return () => unsubscribe();
   }, [profile?.uid, profile?.status]);
 
-  const activeBookings = bookings.filter(b => {
-    const slot = slots.find(s => s.id === b.slot_id);
-    return slot && !slot.isDeleted;
-  });
+  const activeBookings = bookings
+    .filter(b => {
+      const slot = slots.find(s => s.id === b.slot_id);
+      return slot && !slot.isDeleted;
+    })
+    .sort((a, b) => {
+      const dateCompare = (a.exam_date || '').localeCompare(b.exam_date || '');
+      if (dateCompare !== 0) return dateCompare;
+      
+      const slotA = slots.find(s => s.id === a.slot_id);
+      const slotB = slots.find(s => s.id === b.slot_id);
+      const timeA = slotA?.start_time || '';
+      const timeB = slotB?.start_time || '';
+      return timeA.localeCompare(timeB);
+    });
+
+  // Calculate active or next upcoming observation
+  const getNextOrActiveObservation = () => {
+    if (activeBookings.length === 0) return null;
+
+    // Use state tick for reactive changes
+    const nowTime = timeTick;
+
+    const parsed = activeBookings.map(b => {
+      const slot = slots.find(s => s.id === b.slot_id);
+      const startTimeStr = slot?.start_time || '00:00';
+      const endTimeStr = slot?.end_time || '23:59';
+      
+      const dateParts = (b.exam_date || '').split('-');
+      const startParts = startTimeStr.split(':');
+      const endParts = endTimeStr.split(':');
+
+      if (dateParts.length !== 3) return null;
+
+      const year = parseInt(dateParts[0], 10);
+      const month = parseInt(dateParts[1], 10) - 1;
+      const day = parseInt(dateParts[2], 10);
+
+      const startHour = startParts.length > 0 ? parseInt(startParts[0], 10) : 0;
+      const startMin = startParts.length > 1 ? parseInt(startParts[1], 10) : 0;
+
+      const endHour = endParts.length > 0 ? parseInt(endParts[0], 10) : 23;
+      const endMin = endParts.length > 1 ? parseInt(endParts[1], 10) : 59;
+
+      const startDate = new Date(year, month, day, startHour, startMin, 0, 0);
+      const endDate = new Date(year, month, day, endHour, endMin, 0, 0);
+
+      const bookingsForSlot = allBookings.filter(book => book.slot_id === b.slot_id);
+      const room = slot ? getObserverRoom(slot, b, bookingsForSlot) : 'القاعة العامة';
+
+      return {
+        booking: b,
+        slot,
+        startDate,
+        endDate,
+        room,
+        startTimeStr,
+        endTimeStr
+      };
+    }).filter(item => item !== null) as Array<{
+      booking: Booking;
+      slot: ExamSlot | undefined;
+      startDate: Date;
+      endDate: Date;
+      room: string;
+      startTimeStr: string;
+      endTimeStr: string;
+    }>;
+
+    // 1. Check if there is any active (ongoing) observation right now
+    const active = parsed.find(item => nowTime >= item.startDate.getTime() && nowTime <= item.endDate.getTime());
+    if (active) {
+      return {
+        type: 'active' as const,
+        ...active
+      };
+    }
+
+    // 2. Otherwise, find the next upcoming observation
+    const upcoming = parsed
+      .filter(item => item.startDate.getTime() > nowTime)
+      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+
+    if (upcoming.length > 0) {
+      return {
+        type: 'upcoming' as const,
+        ...upcoming[0]
+      };
+    }
+
+    return null;
+  };
+
+  const nextOrActiveObs = getNextOrActiveObservation();
+
+  const getRelativeTimeStr = (targetDate: Date) => {
+    const diffMs = targetDate.getTime() - timeTick;
+    if (diffMs <= 0) return 'تبدأ الآن';
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    if (diffMins < 60) return `تبدأ خلال ${diffMins} دقيقة`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `تبدأ خلال ${diffHours} ساعة و ${diffMins % 60} دقيقة`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `تبدأ خلال ${diffDays} يوم و ${diffHours % 24} ساعة`;
+  };
 
   const totalBookedHours = activeBookings.reduce((acc, curr) => acc + Math.abs(Number(curr.booked_hours || 0)), 0);
   const requiredHours = Number(profile?.required_hours_mode === 'manual' ? (profile?.required_hours ?? 16) : (globalSettings?.default_required_hours ?? 16));
@@ -352,6 +461,87 @@ export default function StudentDashboard() {
               >
                 تعديل الحجوزات الآن
               </button>
+            </div>
+          )}
+
+          {/* Next or Active Observation Smart Pulse Banner */}
+          {nextOrActiveObs && (
+            <div className={`relative border rounded-3xl p-6 overflow-hidden shadow-xs transition-all ${
+              nextOrActiveObs.type === 'active' 
+                ? 'bg-rose-50 border-rose-200 text-rose-950' 
+                : 'bg-indigo-50/50 border-indigo-100 text-slate-900'
+            }`}>
+              {/* Pulsing visual glow overlay */}
+              <div className="absolute top-0 right-0 w-2 h-full bg-indigo-600"></div>
+              {nextOrActiveObs.type === 'active' && (
+                <div className="absolute top-0 right-0 w-2 h-full bg-rose-600"></div>
+              )}
+              
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div className="flex items-start gap-4">
+                  <div className={`p-3 rounded-2xl shrink-0 flex items-center justify-center ${
+                    nextOrActiveObs.type === 'active' 
+                      ? 'bg-rose-100 text-rose-600' 
+                      : 'bg-indigo-100 text-indigo-600'
+                  }`}>
+                    {nextOrActiveObs.type === 'active' ? (
+                      <div className="relative flex h-5 w-5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-5 w-5 bg-rose-600 items-center justify-center text-[10px] text-white font-extrabold">●</span>
+                      </div>
+                    ) : (
+                      <div className="relative flex h-5 w-5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-5 w-5 bg-indigo-600 items-center justify-center text-[10px] text-white font-extrabold">📅</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                      {nextOrActiveObs.type === 'active' ? (
+                        <span className="text-rose-600 font-extrabold bg-rose-100 px-2 py-0.5 rounded-md animate-pulse">مراقبتك جارية الآن ⚡</span>
+                      ) : (
+                        <span className="text-indigo-600 font-extrabold bg-indigo-100/60 px-2 py-0.5 rounded-md">المادة التالية لمراقباتك هي 🔔</span>
+                      )}
+                      <span>•</span>
+                      <span className="font-mono text-[11px] text-slate-400">تحديث تلقائي</span>
+                    </h4>
+                    
+                    <p className="text-base md:text-lg font-bold text-slate-900 leading-tight">
+                      {nextOrActiveObs.booking.course_name}
+                    </p>
+                    
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-600 pt-1">
+                      <span className="flex items-center gap-1">
+                        <strong>التاريخ:</strong> {nextOrActiveObs.booking.exam_date}
+                      </span>
+                      <span>•</span>
+                      <span className="flex items-center gap-1">
+                        <strong>الوقت:</strong> {nextOrActiveObs.startTimeStr} - {nextOrActiveObs.endTimeStr} ({nextOrActiveObs.booking.booked_hours} ساعة)
+                      </span>
+                      <span>•</span>
+                      <span className="flex items-center gap-1.5 bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md font-medium">
+                        <MapPin size={12} className="text-slate-500" />
+                        <span><strong>موقع المراقبة:</strong> {nextOrActiveObs.room}</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {nextOrActiveObs.type === 'upcoming' && (
+                  <div className="flex items-center gap-2 bg-indigo-100/50 text-indigo-700 font-bold text-xs md:text-sm px-4 py-2 rounded-2xl border border-indigo-100/80 animate-pulse shrink-0">
+                    <Clock size={15} />
+                    <span>{getRelativeTimeStr(nextOrActiveObs.startDate)}</span>
+                  </div>
+                )}
+                {nextOrActiveObs.type === 'active' && (
+                  <div className="flex items-center gap-2 bg-rose-100 text-rose-700 font-bold text-xs md:text-sm px-4 py-2 rounded-2xl border border-rose-200 animate-pulse shrink-0">
+                    <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping"></span>
+                    <span>مستمرة الآن وتنتهي خلال {getRelativeTimeStr(nextOrActiveObs.endDate).replace('تبدأ خلال', '')}</span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
