@@ -3,12 +3,13 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { doc, onSnapshot, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
+import { usePWA } from '../hooks/usePWA';
 import { ExamSlot, AppSettings } from '../types';
 import { DeveloperFooter } from '../components/DeveloperFooter';
 import { 
   Calendar, Clock, MapPin, Search, ChevronDown, ChevronUp, Lock, 
   LogIn, LayoutDashboard, SearchCode, AlertTriangle, HelpCircle, RefreshCw, X,
-  Trophy, Award, Check, Star, Info, TrendingUp, Sparkles, BookOpen
+  Trophy, Award, Check, Star, Info, TrendingUp, Sparkles, BookOpen, Download
 } from 'lucide-react';
 
 const academicYearsList = [1, 2, 3, 4, 5, 6, 7];
@@ -16,6 +17,7 @@ const yearNames = ['الأولى', 'الثانية', 'الثالثة', 'الرا
 
 export default function PublicLanding({ isPreview = false }: { isPreview?: boolean }) {
   const { user, isAdmin, isExamOfficer } = useAuth();
+  const { canInstall, installApp } = usePWA();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -251,6 +253,16 @@ export default function PublicLanding({ isPreview = false }: { isPreview?: boole
           
           {/* Action Button */}
           <div className="flex items-center gap-2">
+            {canInstall && (
+              <button
+                onClick={installApp}
+                className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs md:text-sm px-4 py-2.5 rounded-xl transition-all border border-indigo-200 flex items-center gap-2 shadow-xs"
+              >
+                <Download size={16} className="animate-pulse" />
+                <span className="hidden sm:inline">تحميل وتثبيت التطبيق</span>
+                <span className="inline sm:hidden">تثبيت التطبيق</span>
+              </button>
+            )}
             {user ? (
               <button 
                 onClick={() => navigate(isAdmin ? '/admin' : '/dashboard')}
@@ -284,6 +296,29 @@ export default function PublicLanding({ isPreview = false }: { isPreview?: boole
           </p>
           <div className="h-1 w-16 bg-indigo-500 mx-auto rounded-full mt-3" />
         </div>
+
+        {canInstall && (
+          <div className="bg-gradient-to-r from-indigo-50 to-indigo-100/50 border border-indigo-100 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xs animate-in fade-in slide-in-from-top-4 duration-300">
+            <div className="flex items-center gap-4 text-right">
+              <div className="p-3 bg-white text-indigo-600 rounded-2xl shadow-xs border border-indigo-50/50 shrink-0">
+                <Download size={24} className="animate-bounce" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-indigo-950 text-base">ثبّت تطبيق الكلية الرسمي على جهازك</h3>
+                <p className="text-xs text-indigo-700/80 mt-1 leading-relaxed">
+                  احصل على وصول سريع ومباشر للنتائج والبرامج الامتحانية وتوزيع القاعات، وتصفح أسرع مع دعم العمل دون اتصال بالإنترنت واستهلاك أقل للبيانات بالكامل.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={installApp}
+              className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm px-6 py-3 rounded-2xl transition-all shadow-md shadow-indigo-100 flex items-center justify-center gap-2 whitespace-nowrap shrink-0"
+            >
+              <Download size={18} />
+              <span>تثبيت التطبيق الآن</span>
+            </button>
+          </div>
+        )}
 
         {/* Giant Section Toggle Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

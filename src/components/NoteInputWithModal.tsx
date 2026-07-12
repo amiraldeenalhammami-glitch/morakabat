@@ -9,6 +9,7 @@ interface NoteInputWithModalProps {
   className?: string;
   inputClassName?: string;
   rows?: number;
+  iconOnly?: boolean;
 }
 
 export default function NoteInputWithModal({
@@ -18,7 +19,8 @@ export default function NoteInputWithModal({
   label = "تعديل الملاحظة",
   className = "",
   inputClassName = "",
-  rows = 2
+  rows = 2,
+  iconOnly = false
 }: NoteInputWithModalProps) {
   const [value, setValue] = useState(initialValue);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -75,29 +77,52 @@ export default function NoteInputWithModal({
 
   return (
     <div className={`relative flex flex-col w-full ${className}`}>
-      <div className="relative flex items-stretch gap-1 w-full group">
-        <textarea
-          rows={rows}
-          placeholder={placeholder}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onBlur={() => handleInlineSave(value)}
-          className={`w-full text-xs bg-slate-50 border border-slate-200 rounded-xl pr-3 pl-10 py-2 focus:ring-2 focus:ring-indigo-500 outline-none leading-relaxed resize-y transition-all ${inputClassName}`}
-        />
-        <button
-          type="button"
-          onClick={handleOpenModal}
-          title="تعديل في نافذة منبثقة مكبرة"
-          className="absolute left-2 bottom-2 p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-        >
-          <Maximize2 size={13} />
-        </button>
-        {isInlineSaving && (
-          <div className="absolute left-8 bottom-3">
-            <Loader2 size={12} className="animate-spin text-indigo-600" />
-          </div>
-        )}
-      </div>
+      {iconOnly ? (
+        <div className="flex items-center justify-center">
+          <button
+            type="button"
+            onClick={handleOpenModal}
+            title={value && value.trim().length > 0 ? `ملاحظة الأدمن: ${value}` : "إضافة ملاحظة..."}
+            className={`relative p-2.5 rounded-2xl transition-all border flex items-center justify-center shadow-xs group ${
+              value && value.trim().length > 0
+                ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100 hover:border-indigo-300 ring-2 ring-indigo-500/10'
+                : 'bg-slate-50 border-slate-200 text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <MessageSquare size={18} className={value && value.trim().length > 0 ? 'fill-indigo-600/10 text-indigo-600' : ''} />
+            {value && value.trim().length > 0 && (
+              <span className="absolute -top-1 -left-1 flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-indigo-600"></span>
+              </span>
+            )}
+          </button>
+        </div>
+      ) : (
+        <div className="relative flex items-stretch gap-1 w-full group">
+          <textarea
+            rows={rows}
+            placeholder={placeholder}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onBlur={() => handleInlineSave(value)}
+            className={`w-full text-xs bg-slate-50 border border-slate-200 rounded-xl pr-3 pl-10 py-2 focus:ring-2 focus:ring-indigo-500 outline-none leading-relaxed resize-y transition-all ${inputClassName}`}
+          />
+          <button
+            type="button"
+            onClick={handleOpenModal}
+            title="تعديل في نافذة منبثقة مكبرة"
+            className="absolute left-2 bottom-2 p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+          >
+            <Maximize2 size={13} />
+          </button>
+          {isInlineSaving && (
+            <div className="absolute left-8 bottom-3">
+              <Loader2 size={12} className="animate-spin text-indigo-600" />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modern Pop-up Modal Dialog */}
       {isModalOpen && (

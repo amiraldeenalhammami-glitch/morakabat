@@ -17,15 +17,14 @@ const AdminNoteInput = ({
   onSave: (val: string) => void 
 }) => {
   return (
-    <div className="w-56">
-      <NoteInputWithModal
-        initialValue={initialValue}
-        onSave={onSave}
-        placeholder="ملاحظة للمراقب..."
-        label="ملاحظة الإدارة على المراقب"
-        rows={2}
-      />
-    </div>
+    <NoteInputWithModal
+      initialValue={initialValue}
+      onSave={onSave}
+      placeholder="ملاحظة للمراقب..."
+      label="ملاحظة الإدارة على المراقب"
+      rows={2}
+      iconOnly={true}
+    />
   );
 };
 
@@ -629,7 +628,7 @@ export default function AdminStudents() {
               <th className="px-6 py-4 font-medium text-center">ملاحظة المراقب</th>
               <th className="px-6 py-4 font-medium">البيانات الجامعية</th>
               <th className="px-6 py-4 font-medium">الساعات (منجز / مطلوب)</th>
-              <th className="px-6 py-4 font-medium">ملاحظة الأدمن</th>
+              <th className="px-6 py-4 font-medium text-center w-24">ملاحظة الأدمن</th>
               <th className="px-6 py-4 font-medium">الإجراءات</th>
             </tr>
           </thead>
@@ -749,7 +748,7 @@ export default function AdminStudents() {
                         </button>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-6 py-4 text-center">
                       <AdminNoteInput 
                         initialValue={student.admin_note || ''} 
                         onSave={(val) => handleUpdateAdminNote(student.uid, val)} 
@@ -765,7 +764,8 @@ export default function AdminStudents() {
                               `يرجى إدخال كلمة المرور الموحدة لتأكيد تفعيل حساب المراقب: ${student.name}`
                             )}
                             disabled={updatingStatus === student.uid}
-                            className="flex items-center gap-1 bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                            className="flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-emerald-100 transition-all disabled:opacity-50 whitespace-nowrap"
+                            title={`تفعيل كـ ${student.requested_role === 'admin' ? 'مدير' : 'مراقب'}`}
                           >
                             {updatingStatus === student.uid ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
                             <span>تفعيل {student.requested_role === 'admin' ? '(مدير)' : ''}</span>
@@ -779,18 +779,18 @@ export default function AdminStudents() {
                               `يرجى إدخال كلمة المرور الموحدة لتأكيد تجميد حساب المراقب: ${student.name}`
                             )}
                             disabled={updatingStatus === student.uid}
-                            className="flex items-center gap-1 bg-amber-50 text-amber-600 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-amber-100 transition-colors disabled:opacity-50"
+                            className="p-2.5 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-xl transition-all disabled:opacity-50 inline-flex items-center justify-center"
+                            title="تجميد المراقب"
                           >
-                            {updatingStatus === student.uid ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
-                            <span>تجميد المراقب</span>
+                            {updatingStatus === student.uid ? <Loader2 size={15} className="animate-spin" /> : <XCircle size={15} />}
                           </button>
                         )}
                         <button 
                           onClick={() => setDeleteConfirmStudent(student.uid)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                          className="p-2.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl transition-all inline-flex items-center justify-center"
                           title="حذف المراقب نهائياً"
                         >
-                          <Trash2 size={18} />
+                          <Trash2 size={15} />
                         </button>
                       </div>
                     </td>
